@@ -38,11 +38,11 @@ const MODE_ARGS = {
     "run",
     "--filter=@eflob/contracts",
     "--filter=@eflob/web",
-    "--filter=t3",
+    "--filter=eflob",
     "--parallel",
     "dev",
   ],
-  "dev:server": ["run", "--filter=t3", "dev"],
+  "dev:server": ["run", "--filter=eflob", "dev"],
   "dev:web": ["run", "--filter=@eflob/web", "dev"],
   "dev:desktop": ["run", "--filter=@eflob/desktop", "--filter=@eflob/web", "dev"],
 } as const satisfies Record<string, ReadonlyArray<string>>;
