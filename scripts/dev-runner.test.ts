@@ -80,7 +80,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           "run",
           "--filter=@eflob/contracts",
           "--filter=@eflob/web",
-          "--filter=t3",
+          "--filter=eflob",
           "--parallel",
           "dev",
         ]);
