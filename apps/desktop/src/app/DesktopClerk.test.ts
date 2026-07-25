@@ -43,11 +43,11 @@ describe("DesktopClerk", () => {
   });
 
   it("derives the Clerk Frontend API hostname used by the desktop CSP", () => {
-    const publishableKey = `pk_test_${btoa("clerk.t3.codes$")}`;
+    const publishableKey = `pk_test_${btoa("clerk.eflob.dev$")}`;
 
     assert.equal(
       DesktopClerk.resolveDesktopClerkFrontendApiHostname(publishableKey),
-      "clerk.t3.codes",
+      "clerk.eflob.dev",
     );
     assert.equal(DesktopClerk.resolveDesktopClerkFrontendApiHostname(""), undefined);
     assert.equal(DesktopClerk.resolveDesktopClerkFrontendApiHostname("invalid"), undefined);
@@ -66,7 +66,7 @@ describe("DesktopClerk", () => {
           {
             storage: storageAdapter,
             passkeys: true,
-            renderer: { scheme: "t3code-dev", host: "app" },
+            renderer: { scheme: "eflob-dev", host: "app" },
           },
         ],
       ]);
@@ -125,8 +125,8 @@ describe("DesktopClerk", () => {
   });
 
   it.each([
-    { isDevelopment: true, scheme: "t3code-dev" },
-    { isDevelopment: false, scheme: "t3code" },
+    { isDevelopment: true, scheme: "eflob-dev" },
+    { isDevelopment: false, scheme: "eflob" },
   ])("configures the SDK with the $scheme renderer origin", ({ isDevelopment, scheme }) => {
     const bridge = { cleanup: vi.fn() };
     storageMock.mockReturnValue(storageAdapter);

@@ -11,8 +11,8 @@ import {
   EnvironmentOrchestrationHttpApi,
   ProviderInstanceId,
   ThreadId,
-} from "@t3tools/contracts";
-import * as NetService from "@t3tools/shared/Net";
+} from "@eflob/contracts";
+import * as NetService from "@eflob/shared/Net";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
@@ -206,7 +206,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
     Effect.gen(function* () {
       const { output } = yield* captureStdout(runCli(["service", "--help"], noConnectCli));
 
-      assert.include(output, "Manage the T3 Code background service.");
+      assert.include(output, "Manage the eflob background service.");
       assert.include(output, "install");
       assert.include(output, "uninstall");
       assert.include(output, "update");

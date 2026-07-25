@@ -1,9 +1,9 @@
 import * as Order from "effect/Order";
 import * as Arr from "effect/Array";
-import type { RepositoryIdentity } from "@t3tools/contracts";
+import type { RepositoryIdentity } from "@eflob/contracts";
 
 import { scopedProjectKey } from "./scopedEntities";
-import { EnvironmentProject, EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import { EnvironmentProject, EnvironmentThreadShell } from "@eflob/client-runtime/state/shell";
 
 const DateDescending = Order.flip(Order.Date);
 

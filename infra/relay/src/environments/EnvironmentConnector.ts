@@ -4,8 +4,8 @@ import {
   EnvironmentHttpForbiddenError,
   EnvironmentHttpInternalServerError,
   EnvironmentHttpUnauthorizedError,
-} from "@t3tools/contracts";
-import { makeEnvironmentHttpApiClient } from "@t3tools/client-runtime/rpc";
+} from "@eflob/contracts";
+import { makeEnvironmentHttpApiClient } from "@eflob/client-runtime/rpc";
 import {
   RelayCloudEnvironmentHealthProofPayload,
   RelayEnvironmentHealthResponse,
@@ -15,7 +15,7 @@ import {
   RelayCloudMintCredentialProofPayload,
   type RelayEnvironmentConnectResponse,
   type RelayEnvironmentStatusResponse,
-} from "@t3tools/contracts/relay";
+} from "@eflob/contracts/relay";
 import {
   normalizeRelayIssuer,
   RELAY_HEALTH_REQUEST_TYP,
@@ -24,8 +24,8 @@ import {
   RELAY_MINT_RESPONSE_TYP,
   signRelayJwt,
   verifyRelayJwt,
-} from "@t3tools/shared/relayJwt";
-import { stableStringify } from "@t3tools/shared/relaySigning";
+} from "@eflob/shared/relayJwt";
+import { stableStringify } from "@eflob/shared/relaySigning";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -155,7 +155,7 @@ export class EnvironmentConnector extends Context.Service<
       readonly environmentId: string;
     }) => Effect.Effect<RelayEnvironmentStatusResponse, EnvironmentConnectorError>;
   }
->()("t3code-relay/environments/EnvironmentConnector") {}
+>()("eflob-relay/environments/EnvironmentConnector") {}
 
 const decodeMintResponseProof = Schema.decodeUnknownEffect(
   RelayEnvironmentMintResponseProofPayload,

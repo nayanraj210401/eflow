@@ -1,11 +1,14 @@
-# T3 Code
+# eflob
 
-T3 Code is a minimal web GUI for coding agents (currently Codex, Claude, Cursor, and OpenCode, more coming soon).
+> [!NOTE]
+> eflob is a fork of [T3 Code](https://github.com/pingdotgg/t3code) by T3 Tools Inc. Putting this here for transparency.
+
+eflob is a minimal web GUI for coding agents (currently Codex, Claude, Cursor, and OpenCode, more coming soon).
 
 ## Installation
 
 > [!WARNING]
-> T3 Code currently supports Codex, Claude, Cursor, and OpenCode.
+> eflob currently supports Codex, Claude, Cursor, and OpenCode.
 > Install and authenticate at least one provider before use:
 >
 > - Codex: install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`
@@ -16,31 +19,31 @@ T3 Code is a minimal web GUI for coding agents (currently Codex, Claude, Cursor,
 ### Run without installing
 
 ```bash
-npx t3@latest
+npx eflob@latest
 ```
 
-Tip: Use `npx t3@latest --help` for the full CLI reference.
+Tip: Use `npx eflob@latest --help` for the full CLI reference.
 
 ### Desktop app
 
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
+Install the latest version of the desktop app from [GitHub Releases](https://github.com/yourorg/eflob/releases), or from your favorite package registry:
 
 #### Windows (`winget`)
 
 ```bash
-winget install T3Tools.T3Code
+winget install eflob.eflob
 ```
 
 #### macOS (Homebrew)
 
 ```bash
-brew install --cask t3-code
+brew install --cask eflob
 ```
 
 #### Arch Linux (AUR)
 
 ```bash
-yay -S t3code-bin
+yay -S eflob-bin
 ```
 
 ## Some notes
@@ -55,7 +58,7 @@ There's no public docs site yet, checkout the miscellaneous markdown files in [d
 
 - [Getting started](./docs/getting-started/quick-start.md)
 - [Remote access](./docs/user/remote-access.md)
-- [Keeping T3 Code in sync](./docs/user/server-updates.md)
+- [Keeping eflob in sync](./docs/user/server-updates.md)
 - [Architecture overview](./docs/architecture/overview.md)
 - [Provider guides](./docs/providers/codex.md)
 - [Operations](./docs/operations/ci.md)
@@ -65,7 +68,7 @@ There's no public docs site yet, checkout the miscellaneous markdown files in [d
 
 ### Install `vp`
 
-T3 Code uses Vite+ so you'll need to install the global `vp` command-line tool.
+eflob uses Vite+ so you'll need to install the global `vp` command-line tool.
 
 #### macOS / Linux
 
@@ -89,4 +92,4 @@ vp i
 
 Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
 
-Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
+Need support? TODO: add your own community link

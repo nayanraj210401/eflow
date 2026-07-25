@@ -3,7 +3,7 @@ import type {
   DesktopAppStageLabel,
   DesktopRuntimeArch,
   DesktopRuntimeInfo,
-} from "@t3tools/contracts";
+} from "@eflob/contracts";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -74,9 +74,9 @@ export class DesktopEnvironment extends Context.Service<
     readonly resolveResourcePathCandidates: (fileName: string) => readonly string[];
     readonly developmentDockIconPath: string;
   }
->()("@t3tools/desktop/app/DesktopEnvironment") {}
+>()("@eflob/desktop/app/DesktopEnvironment") {}
 
-const APP_BASE_NAME = "T3 Code";
+const APP_BASE_NAME = "eflob";
 
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
@@ -160,8 +160,8 @@ const make = Effect.fn("desktop.environment.make")(function* (
     baseDir,
     isDevelopment && Option.isNone(configuredBaseDir) ? "dev" : "userdata",
   );
-  const userDataDirName = isDevelopment ? "t3code-dev" : "t3code";
-  const legacyUserDataDirName = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
+  const userDataDirName = isDevelopment ? "eflob-dev" : "eflob";
+  const legacyUserDataDirName = isDevelopment ? "eflob (Dev)" : "eflob (Alpha)";
   const resourcesPath = input.resourcesPath;
 
   return DesktopEnvironment.of({
@@ -201,10 +201,10 @@ const make = Effect.fn("desktop.environment.make")(function* (
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
+      isDevelopment ? "com.eflob.eflob.dev" : "com.eflob.eflob",
     ),
-    linuxDesktopEntryName: isDevelopment ? "t3code-dev.desktop" : "t3code.desktop",
-    linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
+    linuxDesktopEntryName: isDevelopment ? "eflob-dev.desktop" : "eflob.desktop",
+    linuxWmClass: isDevelopment ? "eflob-dev" : "eflob",
     userDataDirName,
     legacyUserDataDirName,
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),

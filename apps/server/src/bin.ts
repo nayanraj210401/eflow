@@ -5,7 +5,7 @@ import * as Layer from "effect/Layer";
 import { Command } from "effect/unstable/cli";
 import * as CliError from "effect/unstable/cli/CliError";
 
-import * as NetService from "@t3tools/shared/Net";
+import * as NetService from "@eflob/shared/Net";
 import packageJson from "../package.json" with { type: "json" };
 import { authCommand } from "./cli/auth.ts";
 import { connectCommand } from "./cli/connect.ts";
@@ -41,7 +41,7 @@ const connectUnavailableCommand = Command.make("connect").pipe(
 
 export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
   Command.make("t3", { ...sharedServerCommandFlags }).pipe(
-    Command.withDescription("Run the T3 Code server."),
+    Command.withDescription("Run the eflob server."),
     Command.withHandler((flags) => runServerCommand(flags)),
     Command.withSubcommands([
       startCommand,
