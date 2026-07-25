@@ -18,8 +18,8 @@ import type {
   VcsStatusRemoteResult,
   VcsStatusResult,
   VcsStatusStreamEvent,
-} from "@t3tools/contracts";
-import { GitManagerError } from "@t3tools/contracts";
+} from "@eflob/contracts";
+import { GitManagerError } from "@eflob/contracts";
 
 import * as VcsStatusBroadcaster from "./VcsStatusBroadcaster.ts";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
@@ -50,7 +50,7 @@ const remoteStatusWithPr: VcsStatusRemoteResult = {
   pr: {
     number: 2978,
     title: "[codex] Rewrite client connection architecture",
-    url: "https://github.com/pingdotgg/t3code/pull/2978",
+    url: "https://github.com/yourorg/eflob/pull/2978",
     baseRef: "main",
     headRef: "codex/connection-state-audit",
     state: "open",

@@ -22,13 +22,13 @@ import {
   type ServerProvider,
   type ServerProviderSlashCommand,
   type ServerSettings as ContractServerSettings,
-} from "@t3tools/contracts";
+} from "@eflob/contracts";
 import * as PlatformError from "effect/PlatformError";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
-import { deepMerge } from "@t3tools/shared/Struct";
-import { createModelCapabilities } from "@t3tools/shared/model";
-import { applyServerSettingsPatch } from "@t3tools/shared/serverSettings";
+import { deepMerge } from "@eflob/shared/Struct";
+import { createModelCapabilities } from "@eflob/shared/model";
+import { applyServerSettingsPatch } from "@eflob/shared/serverSettings";
 
 import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from "./CodexProvider.ts";
 import { checkClaudeProviderStatus } from "./ClaudeProvider.ts";
@@ -60,7 +60,7 @@ const disabledCodexSettings: CodexSettings = Schema.decodeSync(CodexSettings)({
   enabled: false,
 });
 
-process.env.T3CODE_CURSOR_ENABLED = "1";
+process.env.EFLOB_CURSOR_ENABLED = "1";
 
 // ── Test helpers ────────────────────────────────────────────────────
 
@@ -1388,7 +1388,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
       // assertions below fail.
       it.effect("propagates real Codex probe failures to the aggregator at boot", () =>
         Effect.gen(function* () {
-          const missingBinary = `t3code_codex_missing_`;
+          const missingBinary = `eflob_codex_missing_`;
           const serverSettings = yield* makeMutableServerSettingsService(
             decodeServerSettings(
               deepMerge(encodedDefaultServerSettings, {
@@ -1502,8 +1502,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
       //
       it.effect("re-probes when settings change the codex binaryPath", () =>
         Effect.gen(function* () {
-          const firstMissing = `t3code_codex_first_`;
-          const secondMissing = `t3code_codex_second_`;
+          const firstMissing = `eflob_codex_first_`;
+          const secondMissing = `eflob_codex_second_`;
           const spawnedCommands: Array<string> = [];
           const serverSettings = yield* makeMutableServerSettingsService(
             decodeServerSettings(
@@ -1769,7 +1769,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               assert.strictEqual(cursorProvider?.status, "disabled");
               assert.strictEqual(
                 cursorProvider?.message,
-                "Cursor is disabled in T3 Code settings.",
+                "Cursor is disabled in eflob settings.",
               );
               assert.strictEqual(cursorSpawned, false);
             }).pipe(Effect.provide(runtimeServices));
@@ -1784,7 +1784,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           assert.strictEqual(status.enabled, false);
           assert.strictEqual(status.status, "disabled");
           assert.strictEqual(status.installed, false);
-          assert.strictEqual(status.message, "Codex is disabled in T3 Code settings.");
+          assert.strictEqual(status.message, "Codex is disabled in eflob settings.");
         }),
       );
     });
@@ -2126,7 +2126,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
       );
 
       it.effect("runs Claude status probes with the configured CLAUDE_CONFIG_DIR", () => {
-        const claudeConfigDir = "/tmp/t3code-claude-home";
+        const claudeConfigDir = "/tmp/eflob-claude-home";
         const recorded = recordingMockSpawnerLayer((args) => {
           const joined = args.join(" ");
           if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };

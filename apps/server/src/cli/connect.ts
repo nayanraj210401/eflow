@@ -3,10 +3,10 @@ import {
   EnvironmentHttpApi,
   type RelayClientInstallProgressEvent,
   type RelayClientInstallProgressStage,
-} from "@t3tools/contracts";
-import { RelayOkResponse } from "@t3tools/contracts/relay";
-import * as RelayClient from "@t3tools/shared/relayClient";
-import { withRelayClientTracing } from "@t3tools/shared/relayTracing";
+} from "@eflob/contracts";
+import { RelayOkResponse } from "@eflob/contracts/relay";
+import * as RelayClient from "@eflob/shared/relayClient";
+import { withRelayClientTracing } from "@eflob/shared/relayTracing";
 import * as Cause from "effect/Cause";
 import * as Config from "effect/Config";
 import * as Console from "effect/Console";
@@ -693,7 +693,7 @@ export const connectCommand = Command.make("connect", {
         const background = yield* recoverServiceOnboardingOffer(offerServiceDuringOnboarding);
         yield* Console.log(
           background
-            ? "\n✓ Background service ready\n\nT3 Code will stay reachable after you log out."
+            ? "\n✓ Background service ready\n\neflob will stay reachable after you log out."
             : "\nNext\n  Start the server with `t3 serve` to make this machine reachable.",
         );
       }),

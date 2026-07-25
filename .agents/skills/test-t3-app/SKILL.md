@@ -1,6 +1,6 @@
 ---
 name: test-t3-app
-description: Launch, retain, and test the T3 Code web app in isolated development environments, including first-try browser authentication with one-time pairing URLs, pairing-token recovery, worktree-safe state directories, cross-turn dev server lifecycle, and direct SQLite inspection or fixture seeding. Use when an agent needs to run T3 locally, iteratively test UI behavior with a human, recover from an expired or consumed pairing token, isolate dev state, or prepare test data in state.sqlite.
+description: Launch, retain, and test the eflob web app in isolated development environments, including first-try browser authentication with one-time pairing URLs, pairing-token recovery, worktree-safe state directories, cross-turn dev server lifecycle, and direct SQLite inspection or fixture seeding. Use when an agent needs to run T3 locally, iteratively test UI behavior with a human, recover from an expired or consumed pairing token, isolate dev state, or prepare test data in state.sqlite.
 ---
 
 # Test T3 App
@@ -12,7 +12,7 @@ Use this skill for the web client. For iOS Simulator, Android Emulator, or physi
 1. Run commands from the repository root.
 2. Choose a base directory that belongs only to the current worktree or test:
    - Use the repository's ignored `.t3` directory for reusable worktree-local state.
-   - Use `mktemp -d /tmp/t3code-test.XXXXXX` for disposable state and retain the printed absolute path.
+   - Use `mktemp -d /tmp/eflob-test.XXXXXX` for disposable state and retain the printed absolute path.
 3. Start the full web stack with `vp run dev --home-dir <base-dir>`.
 4. Keep the terminal session alive and read the selected server port, web port, base directory, and pairing URL from its output.
 
@@ -45,7 +45,7 @@ Treat pairing URLs as secrets. Do not copy them into final responses, screenshot
 Create another token against the same database and web URL as the running dev server:
 
 ```bash
-T3CODE_PORT=<server-port> node apps/server/src/bin.ts auth pairing create \
+EFLOB_PORT=<server-port> node apps/server/src/bin.ts auth pairing create \
   --base-dir <base-dir> \
   --dev-url <web-url> \
   --base-url <web-url> \
@@ -53,7 +53,7 @@ T3CODE_PORT=<server-port> node apps/server/src/bin.ts auth pairing create \
   --label agent-ui-test
 ```
 
-Use the `Pair URL` from this command once. Derive `<server-port>` and `<web-url>` from the current dev-runner output, including any automatically selected port offset. Setting `T3CODE_PORT` keeps the administrative CLI from probing for an unrelated free port.
+Use the `Pair URL` from this command once. Derive `<server-port>` and `<web-url>` from the current dev-runner output, including any automatically selected port offset. Setting `EFLOB_PORT` keeps the administrative CLI from probing for an unrelated free port.
 
 Always pass `--dev-url` for a dev-runner environment so the generated pairing URL uses the current web origin. An explicit base directory stores runtime state in `<base-dir>/userdata`; the `<base-dir>/dev` fallback is only used by an implicit dev home. Use `auth pairing list` to inspect active token metadata; it intentionally cannot reveal token secrets.
 

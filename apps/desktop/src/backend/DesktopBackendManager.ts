@@ -46,8 +46,8 @@ import {
   DesktopBackendBootstrap,
   type DesktopBackendBootstrap as DesktopBackendBootstrapValue,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
-} from "@t3tools/contracts";
-import { waitForHttpReady as waitForHttpReadyShared } from "@t3tools/shared/httpReadiness";
+} from "@eflob/contracts";
+import { waitForHttpReady as waitForHttpReadyShared } from "@eflob/shared/httpReadiness";
 
 import * as DesktopObservability from "../app/DesktopObservability.ts";
 
@@ -80,7 +80,7 @@ export interface DesktopBackendStartConfig {
   readonly env: Record<string, string | undefined>;
   // When true the spawner merges the desktop process.env on top of `env`;
   // when false `env` is passed verbatim. WSL mode opts out so a leaking
-  // T3CODE_HOME can't pin the WSL backend to /mnt/c/...\.t3.
+  // EFLOB_HOME can't pin the WSL backend to /mnt/c/...\.t3.
   readonly extendEnv: boolean;
   readonly bootstrap: DesktopBackendBootstrapValue;
   readonly bootstrapDelivery: DesktopBackendBootstrapDelivery;

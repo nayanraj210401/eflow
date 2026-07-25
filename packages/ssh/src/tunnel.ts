@@ -1,14 +1,14 @@
 import type {
   DesktopSshEnvironmentBootstrap,
   DesktopSshEnvironmentTarget,
-} from "@t3tools/contracts";
+} from "@eflob/contracts";
 import {
   describeReadinessCause,
   waitForHttpReady as waitForHttpReadyShared,
-} from "@t3tools/shared/httpReadiness";
-import * as NetService from "@t3tools/shared/Net";
-import { extractJsonObject, fromLenientJson } from "@t3tools/shared/schemaJson";
-import { satisfiesSemverRange } from "@t3tools/shared/semver";
+} from "@eflob/shared/httpReadiness";
+import * as NetService from "@eflob/shared/Net";
+import { extractJsonObject, fromLenientJson } from "@eflob/shared/schemaJson";
+import { satisfiesSemverRange } from "@eflob/shared/semver";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -573,7 +573,7 @@ if [ -z "$REMOTE_PORT" ]; then
     printf 'Failed to find an available port on the remote host. Ensure node is available on PATH.\\n' >&2
     exit 1
   fi
-  nohup env T3CODE_NO_BROWSER=1 "$RUNNER_FILE" serve --host 127.0.0.1 --port "$REMOTE_PORT" --base-dir "$DEFAULT_SERVER_HOME" >>"$LOG_FILE" 2>&1 < /dev/null &
+  nohup env EFLOB_NO_BROWSER=1 "$RUNNER_FILE" serve --host 127.0.0.1 --port "$REMOTE_PORT" --base-dir "$DEFAULT_SERVER_HOME" >>"$LOG_FILE" 2>&1 < /dev/null &
   REMOTE_PID="$!"
   printf '%s\\n' "$REMOTE_PID" >"$PID_FILE"
   printf '%s\\n' "$REMOTE_PORT" >"$PORT_FILE"
@@ -1594,7 +1594,7 @@ const makeSshEnvironmentManager = Effect.fn("ssh/tunnel.SshEnvironmentManager.ma
 export class SshEnvironmentManager extends Context.Service<
   SshEnvironmentManager,
   SshEnvironmentManagerShape
->()("@t3tools/ssh/tunnel/SshEnvironmentManager") {
+>()("@eflob/ssh/tunnel/SshEnvironmentManager") {
   static readonly layer = (options: SshEnvironmentManagerOptions = {}) =>
     Layer.effect(SshEnvironmentManager, makeSshEnvironmentManager(options));
 }

@@ -6,8 +6,8 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
-import { VcsDriverKind, type VcsDriverKind as VcsDriverKindType } from "@t3tools/contracts";
-import { fromLenientJson } from "@t3tools/shared/schemaJson";
+import { VcsDriverKind, type VcsDriverKind as VcsDriverKindType } from "@eflob/contracts";
+import { fromLenientJson } from "@eflob/shared/schemaJson";
 
 const ProjectVcsConfig = Schema.Struct({
   vcs: Schema.optional(
@@ -71,7 +71,7 @@ export const make = Effect.gen(function* () {
   const findConfigPath = Effect.fn("VcsProjectConfig.findConfigPath")(function* (cwd: string) {
     let current = cwd;
     while (true) {
-      const candidate = path.join(current, ".t3code", "vcs.json");
+      const candidate = path.join(current, ".eflob", "vcs.json");
       const exists = yield* fileSystem.exists(candidate).pipe(
         Effect.mapError(
           (cause) =>

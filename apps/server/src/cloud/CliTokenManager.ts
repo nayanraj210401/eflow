@@ -29,7 +29,7 @@ import {
   buildConnectClerkAuthorizeUrl,
   checkConnectAuthCode,
   connectCallbackUrl,
-} from "@t3tools/shared/connectAuth";
+} from "@eflob/shared/connectAuth";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ExternalLauncher from "../process/externalLauncher.ts";

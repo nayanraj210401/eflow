@@ -1,4 +1,4 @@
-import type { AssetResource } from "@t3tools/contracts";
+import type { AssetResource } from "@eflob/contracts";
 import {
   AssetAttachmentNotFoundError,
   AssetPreviewTypeValidationError,
@@ -12,14 +12,14 @@ import {
   AssetWorkspacePathValidationError,
   AssetWorkspaceResolutionError,
   AssetWorkspaceRootNormalizationError,
-} from "@t3tools/contracts";
+} from "@eflob/contracts";
 import {
   isWorkspaceImagePreviewPath,
   isWorkspacePreviewEntryPath,
   WORKSPACE_BROWSER_PREVIEW_EXTENSIONS,
   WORKSPACE_IMAGE_PREVIEW_EXTENSIONS,
-} from "@t3tools/shared/filePreview";
-import { PROJECT_FAVICON_FALLBACK_MARKER } from "@t3tools/shared/projectFavicon";
+} from "@eflob/shared/filePreview";
+import { PROJECT_FAVICON_FALLBACK_MARKER } from "@eflob/shared/projectFavicon";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";

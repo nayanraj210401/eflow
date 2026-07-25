@@ -12,20 +12,20 @@ import {
   type ProviderInstanceId,
   type ScopedThreadRef,
   type SidebarProjectGroupingMode,
-} from "@t3tools/contracts";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
+} from "@eflob/contracts";
+import { scopeThreadRef } from "@eflob/client-runtime/environment";
+import { safeErrorLogAttributes } from "@eflob/client-runtime/errors";
 import {
   isAtomCommandInterrupted,
   settlePromise,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@eflob/client-runtime/state/runtime";
 import {
   DEFAULT_UNIFIED_SETTINGS,
   MAX_GLASS_OPACITY,
   MIN_GLASS_OPACITY,
-} from "@t3tools/contracts/settings";
-import { createModelSelection } from "@t3tools/shared/model";
+} from "@eflob/contracts/settings";
+import { createModelSelection } from "@eflob/shared/model";
 import * as Arr from "effect/Array";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
@@ -557,7 +557,7 @@ export function GeneralSettingsPanel() {
       <SettingsSection title="General">
         <SettingsRow
           title="Theme"
-          description="Choose how T3 Code looks across the app."
+          description="Choose how eflob looks across the app."
           resetAction={
             theme !== "system" ? (
               <SettingResetButton label="theme" onClick={() => setTheme("system")} />

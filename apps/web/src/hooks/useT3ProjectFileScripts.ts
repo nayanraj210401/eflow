@@ -2,8 +2,8 @@ import {
   T3_PROJECT_FILE_NAME,
   type EnvironmentId,
   type T3ProjectFileScript,
-} from "@t3tools/contracts";
-import { T3ProjectFileFromJson } from "@t3tools/shared/t3ProjectFile";
+} from "@eflob/contracts";
+import { T3ProjectFileFromJson } from "@eflob/shared/t3ProjectFile";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import { useMemo } from "react";
@@ -15,7 +15,7 @@ const decodeT3ProjectFile = Schema.decodeExit(T3ProjectFileFromJson);
 const NO_SCRIPTS: ReadonlyArray<T3ProjectFileScript> = [];
 
 /**
- * Scripts declared in the project's checked-in `t3.json`, offered in the
+ * Scripts declared in the project's checked-in `eflob.json`, offered in the
  * scripts menu for import. Missing, truncated, or invalid files resolve to
  * an empty list.
  */

@@ -9,7 +9,7 @@ import {
   resolveAddProjectPath,
   sortAddProjectProviderSources,
   type AddProjectRemoteSource,
-} from "@t3tools/client-runtime/operations/projects";
+} from "@eflob/client-runtime/operations/projects";
 import {
   appendBrowsePathSegment,
   canNavigateUp,
@@ -20,8 +20,8 @@ import {
   hasTrailingPathSeparator,
   inferProjectTitleFromPath,
   isFilesystemBrowseQuery,
-} from "@t3tools/client-runtime/state/projects";
-import { CommandId, type EnvironmentId, ProjectId } from "@t3tools/contracts";
+} from "@eflob/client-runtime/state/projects";
+import { CommandId, type EnvironmentId, ProjectId } from "@eflob/contracts";
 import { StackActions, useNavigation } from "@react-navigation/native";
 import { SymbolView } from "../../components/AppSymbol";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
