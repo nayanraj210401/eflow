@@ -1,5 +1,8 @@
 # eflob
 
+> [!NOTE]
+> eflob is a fork of [T3 Code](https://github.com/pingdotgg/t3code) by T3 Tools Inc. Putting this here for transparency.
+
 eflob is a minimal web GUI for coding agents (currently Codex, Claude, Cursor, and OpenCode, more coming soon).
 
 ## Installation
