@@ -1,4 +1,4 @@
-import type { ProviderAccountUsageSnapshots } from "@eflob/contracts";
+import type { ProviderAccountUsageSnapshots, ProviderDriverKind } from "@eflob/contracts";
 
 import { formatProviderDisplayName } from "../../lib/contextWindow";
 
@@ -11,6 +11,10 @@ export type AccountUsageTone = "ok" | "warning" | "exhausted";
 
 export type AccountUsageRow = {
   readonly id: string;
+  /** Kept alongside `providerLabel` so the component can render a per-driver
+   * icon — with multiple providers reporting usage, the label text alone
+   * doesn't scan quickly at a glance. */
+  readonly driver: ProviderDriverKind;
   readonly providerLabel: string;
   /** Duration label such as "5h" or "7d", falling back to the raw window key. */
   readonly windowLabel: string;
@@ -62,6 +66,7 @@ export function buildAccountUsageRows(
 
       rows.push({
         id: `${snapshot.instanceId}:${window.key}`,
+        driver: snapshot.driver,
         providerLabel: formatProviderDisplayName(snapshot.driver),
         windowLabel: window.label ?? window.key,
         usedPercent: Math.max(0, Math.min(100, window.usedPercent)),

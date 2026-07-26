@@ -95,6 +95,25 @@ describe("buildAccountUsageRows", () => {
     expect(rows[0]?.providerLabel).toBe("Claude");
   });
 
+  it("carries the driver kind through so the UI can render a per-provider icon", () => {
+    const claudeRows = buildAccountUsageRows(
+      snapshots([{ key: "five_hour", label: "5h", usedPercent: 10 }]),
+      NOW,
+    );
+    const codexSnapshot: ProviderAccountUsageSnapshots = [
+      {
+        instanceId: ProviderInstanceId.make("codex_default"),
+        driver: ProviderDriverKind.make("codex"),
+        windows: [{ key: "primary", label: "5h", usedPercent: 20, observedAt: NOW }],
+        updatedAt: NOW,
+      },
+    ] as ProviderAccountUsageSnapshots;
+    const codexRows = buildAccountUsageRows(codexSnapshot, NOW);
+
+    expect(claudeRows[0]?.driver).toBe("claudeAgent");
+    expect(codexRows[0]?.driver).toBe("codex");
+  });
+
   it("carries account and plan labels through", () => {
     const rows = buildAccountUsageRows(
       snapshots([{ key: "five_hour", label: "5h", usedPercent: 10 }], {

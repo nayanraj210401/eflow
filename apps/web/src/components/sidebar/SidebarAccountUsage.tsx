@@ -1,8 +1,10 @@
 import { useAtomValue } from "@effect/atom-react";
+import type { ProviderDriverKind } from "@eflob/contracts";
 import { memo, useMemo } from "react";
 
 import { cn } from "../../lib/utils";
 import { primaryServerAccountUsageAtom } from "../../state/server";
+import { getDriverOption } from "../settings/providerDriverMeta";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { useSidebar } from "../ui/sidebar";
 import {
@@ -12,6 +14,18 @@ import {
   formatResetsIn,
   VISIBLE_ACCOUNT_USAGE_ROWS,
 } from "./SidebarAccountUsage.logic";
+
+/**
+ * Per-driver mark so a row reads at a glance which provider it belongs to —
+ * necessary once more than one provider can report usage side by side. Falls
+ * back to nothing (not a generic placeholder) for a fork/unknown driver kind,
+ * since `providerLabel` already covers that case in text.
+ */
+function ProviderIcon(props: { driver: ProviderDriverKind; className?: string }) {
+  const DriverGlyph = getDriverOption(props.driver)?.icon;
+  if (!DriverGlyph) return null;
+  return <DriverGlyph className={props.className} aria-hidden="true" />;
+}
 
 const TONE_BAR_COLORS: Record<AccountUsageTone, string> = {
   ok: "color-mix(in oklab, var(--color-muted-foreground) 72%, transparent)",
@@ -44,8 +58,11 @@ function UsageDetailRow(props: { row: AccountUsageRow; nowIso: string }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-3 text-[11px] leading-4">
-        <span className="truncate text-muted-foreground/70">
-          {row.providerLabel} · {row.windowLabel}
+        <span className="flex min-w-0 items-center gap-1.5 truncate text-muted-foreground/70">
+          <ProviderIcon driver={row.driver} className="size-3 shrink-0" />
+          <span className="truncate">
+            {row.providerLabel} · {row.windowLabel}
+          </span>
         </span>
         <span className="font-medium tabular-nums text-muted-foreground/80">
           {Math.round(row.usedPercent)}%
@@ -108,9 +125,13 @@ export const SidebarAccountUsage = memo(function SidebarAccountUsage() {
           >
             {visibleRows.map((row) =>
               isCollapsed ? (
-                <UsageBar key={row.id} row={row} compact />
+                <div key={row.id} className="flex w-full items-center gap-1">
+                  <ProviderIcon driver={row.driver} className="size-2.5 shrink-0" />
+                  <UsageBar row={row} compact />
+                </div>
               ) : (
                 <div key={row.id} className="flex w-full items-center gap-2">
+                  <ProviderIcon driver={row.driver} className="size-3 shrink-0" />
                   <span className="w-5 shrink-0 text-left text-[10px] font-medium tabular-nums text-sidebar-muted-foreground/70">
                     {row.windowLabel}
                   </span>
