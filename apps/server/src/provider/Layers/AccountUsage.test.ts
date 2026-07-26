@@ -67,14 +67,14 @@ describe("AccountUsage", () => {
         yield* usage.recordRuntimeEvent(
           claudeRateLimitEvent({
             rateLimitType: "five_hour",
-            utilization: 40,
+            utilization: 0.4,
             resetsAt: FUTURE_SECONDS,
           }),
         );
         yield* usage.recordRuntimeEvent(
           claudeRateLimitEvent({
             rateLimitType: "seven_day",
-            utilization: 12,
+            utilization: 0.12,
             resetsAt: FUTURE_SECONDS,
           }),
         );
@@ -91,13 +91,13 @@ describe("AccountUsage", () => {
     const snapshots = await run((usage) =>
       Effect.gen(function* () {
         yield* usage.recordRuntimeEvent(
-          claudeRateLimitEvent({ rateLimitType: "five_hour", utilization: 40 }),
+          claudeRateLimitEvent({ rateLimitType: "five_hour", utilization: 0.4 }),
         );
         yield* usage.recordRuntimeEvent(
-          claudeRateLimitEvent({ rateLimitType: "seven_day", utilization: 12 }),
+          claudeRateLimitEvent({ rateLimitType: "seven_day", utilization: 0.12 }),
         );
         yield* usage.recordRuntimeEvent(
-          claudeRateLimitEvent({ rateLimitType: "five_hour", utilization: 65 }),
+          claudeRateLimitEvent({ rateLimitType: "five_hour", utilization: 0.65 }),
         );
         return yield* usage.getSnapshots;
       }),
@@ -114,14 +114,14 @@ describe("AccountUsage", () => {
         yield* usage.recordRuntimeEvent(
           claudeRateLimitEvent({
             rateLimitType: "five_hour",
-            utilization: 90,
+            utilization: 0.9,
             resetsAt: PAST_SECONDS,
           }),
         );
         yield* usage.recordRuntimeEvent(
           claudeRateLimitEvent({
             rateLimitType: "seven_day",
-            utilization: 20,
+            utilization: 0.2,
             resetsAt: FUTURE_SECONDS,
           }),
         );
@@ -136,11 +136,11 @@ describe("AccountUsage", () => {
     const snapshots = await run((usage) =>
       Effect.gen(function* () {
         yield* usage.recordRuntimeEvent(
-          claudeRateLimitEvent({ rateLimitType: "five_hour", utilization: 10 }),
+          claudeRateLimitEvent({ rateLimitType: "five_hour", utilization: 0.1 }),
         );
         yield* usage.recordRuntimeEvent(
           claudeRateLimitEvent(
-            { rateLimitType: "five_hour", utilization: 80 },
+            { rateLimitType: "five_hour", utilization: 0.8 },
             { instanceId: ProviderInstanceId.make("claude_personal") },
           ),
         );

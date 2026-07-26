@@ -104,6 +104,17 @@ export function normalizeClaudeRateLimitEvent(
   const utilization = asFiniteNumber(info.utilization);
   if (utilization === undefined) return undefined;
 
+  // Claude reports utilization as a 0-1 fraction, unlike Codex's `usedPercent`
+  // which is a 0-100 integer. Verified against a live event: an account the
+  // `/usage` command reported as 100% consumed sent `utilization: 0.99` with
+  // `surpassedThreshold: 0.9`. Treating it as a percentage renders 99% as "1%"
+  // — the opposite signal, claiming headroom right before a cutoff.
+  //
+  // Note the SDK's separate `get_usage` response documents *its* `utilization`
+  // as 0-100; these are different types and different scales. Do not unify them
+  // without re-checking against a live event.
+  const usedPercent = clampPercent(utilization * 100);
+
   // Unknown `rateLimitType` values pass through rather than being dropped —
   // upstream adds window kinds and a hidden window is worse than an unlabelled
   // one. `unknown` only appears when the provider omitted the field entirely.
@@ -115,7 +126,7 @@ export function normalizeClaudeRateLimitEvent(
 
   return {
     key,
-    usedPercent: clampPercent(utilization),
+    usedPercent,
     observedAt,
     ...(label ? { label } : {}),
     ...(resetsAt ? { resetsAt } : {}),

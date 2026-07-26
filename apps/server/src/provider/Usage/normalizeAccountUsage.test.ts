@@ -20,12 +20,12 @@ function claudeEvent(info: Record<string, unknown>) {
 }
 
 describe("normalizeClaudeRateLimitEvent", () => {
-  it("normalizes a five_hour window", () => {
+  it("normalizes a five_hour window, scaling the 0-1 utilization fraction", () => {
     const window = normalizeClaudeRateLimitEvent(
       claudeEvent({
         status: "allowed",
         rateLimitType: "five_hour",
-        utilization: 42.5,
+        utilization: 0.425,
         resetsAt: RESETS_AT_SECONDS,
       }),
       OBSERVED_AT,
@@ -42,9 +42,31 @@ describe("normalizeClaudeRateLimitEvent", () => {
     });
   });
 
+  it("reports a nearly-exhausted window as ~100%, not ~1%", () => {
+    // Captured verbatim from a live session whose `/usage` reported the 5h
+    // window as 100% consumed. Treating `utilization` as a percentage rendered
+    // this as "1%", claiming headroom right before a cutoff.
+    const window = normalizeClaudeRateLimitEvent(
+      claudeEvent({
+        status: "allowed_warning",
+        resetsAt: 1_785_054_000,
+        rateLimitType: "five_hour",
+        utilization: 0.99,
+        isUsingOverage: false,
+        overageInUse: true,
+        surpassedThreshold: 0.9,
+      }),
+      OBSERVED_AT,
+    );
+
+    expect(window?.usedPercent).toBeCloseTo(99, 6);
+    expect(window?.status).toBe("warning");
+    expect(window?.resetsAt).toBe("2026-07-26T08:20:00.000Z");
+  });
+
   it("labels seven_day windows in days", () => {
     const window = normalizeClaudeRateLimitEvent(
-      claudeEvent({ status: "allowed_warning", rateLimitType: "seven_day", utilization: 91 }),
+      claudeEvent({ status: "allowed_warning", rateLimitType: "seven_day", utilization: 0.91 }),
       OBSERVED_AT,
     );
 
@@ -56,7 +78,7 @@ describe("normalizeClaudeRateLimitEvent", () => {
 
   it("passes unknown rateLimitType values through instead of dropping the window", () => {
     const window = normalizeClaudeRateLimitEvent(
-      claudeEvent({ status: "rejected", rateLimitType: "thirty_day_future", utilization: 100 }),
+      claudeEvent({ status: "rejected", rateLimitType: "thirty_day_future", utilization: 1 }),
       OBSERVED_AT,
     );
 
@@ -67,7 +89,7 @@ describe("normalizeClaudeRateLimitEvent", () => {
 
   it("falls back to an unknown key when rateLimitType is absent", () => {
     const window = normalizeClaudeRateLimitEvent(
-      claudeEvent({ status: "allowed", utilization: 10 }),
+      claudeEvent({ status: "allowed", utilization: 0.1 }),
       OBSERVED_AT,
     );
 
@@ -76,11 +98,11 @@ describe("normalizeClaudeRateLimitEvent", () => {
 
   it("clamps utilization into 0..100", () => {
     const over = normalizeClaudeRateLimitEvent(
-      claudeEvent({ rateLimitType: "five_hour", utilization: 140 }),
+      claudeEvent({ rateLimitType: "five_hour", utilization: 1.4 }),
       OBSERVED_AT,
     );
     const under = normalizeClaudeRateLimitEvent(
-      claudeEvent({ rateLimitType: "five_hour", utilization: -5 }),
+      claudeEvent({ rateLimitType: "five_hour", utilization: -0.05 }),
       OBSERVED_AT,
     );
 
@@ -90,11 +112,14 @@ describe("normalizeClaudeRateLimitEvent", () => {
 
   it("accepts the raw SDK message without the runtime envelope", () => {
     const window = normalizeClaudeRateLimitEvent(
-      { type: "rate_limit_event", rate_limit_info: { rateLimitType: "five_hour", utilization: 7 } },
+      {
+        type: "rate_limit_event",
+        rate_limit_info: { rateLimitType: "five_hour", utilization: 0.07 },
+      },
       OBSERVED_AT,
     );
 
-    expect(window?.usedPercent).toBe(7);
+    expect(window?.usedPercent).toBeCloseTo(7, 6);
   });
 
   it("returns nothing when utilization is missing or the payload is unrecognized", () => {
