@@ -89,6 +89,7 @@ import {
   type ProviderAdapterError,
 } from "../Errors.ts";
 import { type ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
+import { normalizeClaudeTurnUsage } from "../Usage/normalizeTurnUsage.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
 const decodeUnknownJsonStringExit = Schema.decodeUnknownExit(Schema.UnknownFromJsonString);
@@ -1887,6 +1888,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       context.lastKnownContextWindow = resultContextWindow;
     }
 
+    // Normalized alongside the raw `usage`/`modelUsage` passthroughs so
+    // consumers get a stable shape without the raw fields losing fidelity.
+    const turnUsageSummary = normalizeClaudeTurnUsage(result);
+
     const maxTokens = resultContextWindow ?? context.lastKnownContextWindow;
     const accumulatedTotalProcessedTokens = claudeTotalProcessedTokens(result?.usage);
     if (accumulatedTotalProcessedTokens !== undefined) {
@@ -1974,6 +1979,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           ...(typeof result?.total_cost_usd === "number"
             ? { totalCostUsd: result.total_cost_usd }
             : {}),
+          ...(turnUsageSummary ? { usageSummary: turnUsageSummary } : {}),
           ...(errorMessage ? { errorMessage } : {}),
         },
         providerRefs: {},
@@ -2049,6 +2055,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(typeof result?.total_cost_usd === "number"
           ? { totalCostUsd: result.total_cost_usd }
           : {}),
+        ...(turnUsageSummary ? { usageSummary: turnUsageSummary } : {}),
         ...(errorMessage ? { errorMessage } : {}),
       },
       providerRefs: nativeProviderRefs(context),
@@ -2575,6 +2582,11 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       provider: PROVIDER,
       createdAt: stamp.createdAt,
       threadId: context.session.threadId,
+      // Account-scoped telemetry (rate limits) is keyed by instance id, so two
+      // Claude accounts stay separate instead of merging into one snapshot.
+      ...(context.session.providerInstanceId
+        ? { providerInstanceId: context.session.providerInstanceId }
+        : {}),
       ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
       providerRefs: nativeProviderRefs(context),
       raw: {
@@ -2850,6 +2862,11 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       provider: PROVIDER,
       createdAt: stamp.createdAt,
       threadId: context.session.threadId,
+      // Account-scoped telemetry (rate limits) is keyed by instance id, so two
+      // Claude accounts stay separate instead of merging into one snapshot.
+      ...(context.session.providerInstanceId
+        ? { providerInstanceId: context.session.providerInstanceId }
+        : {}),
       ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
       providerRefs: nativeProviderRefs(context),
       raw: {
@@ -3547,7 +3564,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(mcpSession
           ? {
               mcpServers: {
-                "eflob": {
+                eflob: {
                   type: "http",
                   url: mcpSession.endpoint,
                   headers: {

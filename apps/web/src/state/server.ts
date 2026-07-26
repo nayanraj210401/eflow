@@ -1,6 +1,7 @@
 import {
   DEFAULT_SERVER_SETTINGS,
   type EditorId,
+  type ProviderAccountUsageSnapshots,
   type ServerConfig,
   type ServerConfigStreamEvent,
   type ServerLifecycleWelcomePayload,
@@ -34,6 +35,7 @@ interface PrimaryServerState {
 
 const EMPTY_AVAILABLE_EDITORS: ReadonlyArray<EditorId> = [];
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
+const EMPTY_ACCOUNT_USAGE: ProviderAccountUsageSnapshots = [];
 const EMPTY_PRIMARY_SERVER_STATE: PrimaryServerState = {
   config: null,
   latestEvent: null,
@@ -79,6 +81,11 @@ export const primaryServerProvidersAtom = Atom.make(
   (get): ReadonlyArray<ServerProvider> =>
     get(primaryServerConfigAtom)?.providers ?? EMPTY_SERVER_PROVIDERS,
 ).pipe(Atom.withLabel("web-primary-server-providers"));
+
+export const primaryServerAccountUsageAtom = Atom.make(
+  (get): ProviderAccountUsageSnapshots =>
+    get(primaryServerConfigAtom)?.accountUsage ?? EMPTY_ACCOUNT_USAGE,
+).pipe(Atom.withLabel("web-primary-server-account-usage"));
 
 export const primaryServerKeybindingsAtom = Atom.make(
   (get): ServerConfig["keybindings"] =>

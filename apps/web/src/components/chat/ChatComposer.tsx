@@ -186,6 +186,7 @@ import {
   deriveLatestContextWindowSnapshot,
   formatProviderDisplayName,
 } from "../../lib/contextWindow";
+import { deriveThreadUsageSummary } from "../../lib/threadUsage";
 import { formatProviderSkillDisplayName } from "../../providerSkillPresentation";
 import { searchProviderSkills } from "../../providerSkillSearch";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
@@ -402,6 +403,7 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
 const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(props: {
   compact: boolean;
   activeContextWindow: ReturnType<typeof deriveLatestContextWindowSnapshot>;
+  activeThreadUsage: ReturnType<typeof deriveThreadUsageSummary>;
   activeThreadProviderDisplayName: string | null;
   isPreparingWorktree: boolean;
   pendingAction: {
@@ -425,9 +427,12 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
 }) {
   return (
     <>
-      {props.activeContextWindow ? (
+      {/* Either signal alone is worth showing: a resumed thread can have
+          recorded turn usage before the provider reports a context window. */}
+      {props.activeContextWindow || props.activeThreadUsage ? (
         <ContextWindowMeter
           usage={props.activeContextWindow}
+          threadUsage={props.activeThreadUsage}
           providerDisplayName={props.activeThreadProviderDisplayName}
         />
       ) : null}
@@ -929,6 +934,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // ------------------------------------------------------------------
   const activeContextWindow = useMemo(
     () => deriveLatestContextWindowSnapshot(activeThreadActivities ?? []),
+    [activeThreadActivities],
+  );
+  const activeThreadUsage = useMemo(
+    () => deriveThreadUsageSummary(activeThreadActivities ?? []),
     [activeThreadActivities],
   );
   const activeThreadProviderDisplayName = useMemo(() => {
@@ -2718,6 +2727,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 <ComposerFooterPrimaryActions
                   compact={isComposerPrimaryActionsCompact}
                   activeContextWindow={activeContextWindow}
+                  activeThreadUsage={activeThreadUsage}
                   activeThreadProviderDisplayName={activeThreadProviderDisplayName}
                   pendingAction={pendingPrimaryAction}
                   isRunning={phase === "running"}

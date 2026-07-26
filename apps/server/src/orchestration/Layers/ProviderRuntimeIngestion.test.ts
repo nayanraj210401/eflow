@@ -40,6 +40,7 @@ import {
   ProviderService,
   type ProviderServiceShape,
 } from "../../provider/Services/ProviderService.ts";
+import { AccountUsageLive } from "../../provider/Layers/AccountUsage.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
@@ -239,6 +240,7 @@ describe("ProviderRuntimeIngestion", () => {
       Layer.provideMerge(projectionSnapshotLayer),
       Layer.provideMerge(SqlitePersistenceMemory),
       Layer.provideMerge(Layer.succeed(ProviderService, provider.service)),
+      Layer.provideMerge(AccountUsageLive),
       Layer.provideMerge(makeTestServerSettingsLayer(options?.serverSettings)),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
       Layer.provideMerge(NodeServices.layer),
@@ -2942,6 +2944,104 @@ describe("ProviderRuntimeIngestion", () => {
       lastUsedTokens: 1075,
       compactsAutomatically: true,
     });
+  });
+
+  it("projects turn usage summaries into turn.usage activities", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-completed-usage"),
+      provider: ProviderDriverKind.make("claudeAgent"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      payload: {
+        state: "completed",
+        usageSummary: {
+          inputTokens: 120,
+          outputTokens: 340,
+          cacheReadInputTokens: 9_000,
+          cacheCreationInputTokens: 1_500,
+          totalCostUsd: 0.31,
+          durationMs: 4_200,
+          models: [
+            {
+              model: "claude-opus-4-8",
+              inputTokens: 120,
+              outputTokens: 340,
+              costUsd: 0.31,
+            },
+          ],
+        },
+      },
+    });
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.activities.some(
+        (activity: ProviderRuntimeTestActivity) => activity.kind === "turn.usage",
+      ),
+    );
+
+    const usageActivity = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) => activity.kind === "turn.usage",
+    );
+    expect(usageActivity?.payload).toMatchObject({
+      inputTokens: 120,
+      outputTokens: 340,
+      cacheReadInputTokens: 9_000,
+      cacheCreationInputTokens: 1_500,
+      totalCostUsd: 0.31,
+      models: [{ model: "claude-opus-4-8", costUsd: 0.31 }],
+    });
+  });
+
+  it("does not record a turn.usage activity when the turn reported no usage", async () => {
+    const harness = await createHarness();
+
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-completed-no-usage"),
+      provider: ProviderDriverKind.make("claudeAgent"),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      threadId: asThreadId("thread-1"),
+      payload: { state: "completed" },
+    });
+    await harness.drain();
+
+    const thread = await waitForThread(harness.readModel, () => true);
+    expect(
+      thread.activities.filter(
+        (activity: ProviderRuntimeTestActivity) => activity.kind === "turn.usage",
+      ),
+    ).toEqual([]);
+  });
+
+  it("routes account rate-limit events away from the thread pipeline", async () => {
+    const harness = await createHarness();
+
+    harness.emit({
+      type: "account.rate-limits.updated",
+      eventId: asEventId("evt-account-rate-limits"),
+      provider: ProviderDriverKind.make("claudeAgent"),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      threadId: asThreadId("thread-1"),
+      payload: {
+        rateLimits: {
+          type: "rate_limit_event",
+          rate_limit_info: { status: "allowed", rateLimitType: "five_hour", utilization: 25 },
+        },
+      },
+    });
+    await harness.drain();
+
+    // Account usage is account-scoped: it must leave no trace on the thread.
+    const thread = await waitForThread(harness.readModel, () => true);
+    expect(
+      thread.activities.filter((activity: ProviderRuntimeTestActivity) =>
+        activity.kind.startsWith("account."),
+      ),
+    ).toEqual([]);
   });
 
   it("projects Codex camelCase token usage payloads into normalized thread activities", async () => {

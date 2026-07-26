@@ -76,6 +76,7 @@ import {
   observeRpcStream as instrumentRpcStream,
   observeRpcStreamEffect as instrumentRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
+import * as AccountUsageService from "./provider/Services/AccountUsage.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
@@ -419,6 +420,7 @@ const makeWsRpcLayer = (
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
+      const accountUsage = yield* AccountUsageService.AccountUsage;
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const config = yield* ServerConfig.ServerConfig;
@@ -1097,6 +1099,7 @@ const makeWsRpcLayer = (
           settings,
           shellResumeCompletionMarker: true,
           threadResumeCompletionMarker: true,
+          accountUsage: yield* accountUsage.getSnapshots,
         };
       });
 
@@ -2011,6 +2014,13 @@ const makeWsRpcLayer = (
                   payload: { settings },
                 })),
               );
+              const accountUsageUpdates = accountUsage.streamChanges.pipe(
+                Stream.map((snapshots) => ({
+                  version: 1 as const,
+                  type: "accountUsage" as const,
+                  payload: { accountUsage: snapshots },
+                })),
+              );
 
               yield* providerRegistry
                 .refresh()
@@ -2018,7 +2028,7 @@ const makeWsRpcLayer = (
 
               const liveUpdates = Stream.merge(
                 keybindingsUpdates,
-                Stream.merge(providerStatuses, settingsUpdates),
+                Stream.merge(providerStatuses, Stream.merge(settingsUpdates, accountUsageUpdates)),
               );
 
               return Stream.concat(
