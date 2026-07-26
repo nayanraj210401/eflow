@@ -14,6 +14,7 @@ import * as Stream from "effect/Stream";
 
 import {
   normalizeAccountLabels,
+  normalizeClaudeGetUsageResponse,
   normalizeClaudeRateLimitEvent,
   normalizeCodexRateLimitsSnapshot,
 } from "../Usage/normalizeAccountUsage.ts";
@@ -21,6 +22,23 @@ import { AccountUsage, type AccountUsageShape } from "../Services/AccountUsage.t
 
 /** Driver kinds whose rate-limit payloads follow the Claude SDK shape. */
 const CLAUDE_DRIVERS = new Set(["claudeAgent", "claude"]);
+
+/**
+ * Discriminant for the `/usage`-derived payload (see `normalizeClaudeGetUsageResponse`),
+ * distinguishing it from the raw streamed `rate_limit_event` envelope on the
+ * same `account.rate-limits.updated` event type.
+ */
+const CLAUDE_GET_USAGE_SOURCE = "claude-get-usage";
+
+function isClaudeGetUsagePayload(
+  value: unknown,
+): value is { source: typeof CLAUDE_GET_USAGE_SOURCE; data: unknown } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    (value as Record<string, unknown>).source === CLAUDE_GET_USAGE_SOURCE
+  );
+}
 
 /**
  * Runtime events carry `providerInstanceId` only once an adapter binds one.
@@ -104,8 +122,19 @@ const makeAccountUsage = Effect.gen(function* () {
         accountLabel = labels.accountLabel;
         planLabel = labels.planLabel;
       } else if (CLAUDE_DRIVERS.has(String(event.provider))) {
-        const window = normalizeClaudeRateLimitEvent(event.payload.rateLimits, observedAt);
-        windows = window ? [window] : [];
+        const rateLimits = event.payload.rateLimits;
+        if (isClaudeGetUsagePayload(rateLimits)) {
+          // Authoritative source: every window at once, already 0-100, with an
+          // ISO reset time and the subscription tier. Preferred over the
+          // streamed event below, which can omit `utilization` entirely for
+          // accounts with overage disabled at the org level.
+          const result = normalizeClaudeGetUsageResponse(rateLimits.data, observedAt);
+          windows = result.windows;
+          planLabel = result.planLabel;
+        } else {
+          const window = normalizeClaudeRateLimitEvent(rateLimits, observedAt);
+          windows = window ? [window] : [];
+        }
       } else {
         const result = normalizeCodexRateLimitsSnapshot(event.payload.rateLimits, observedAt);
         windows = result.windows;

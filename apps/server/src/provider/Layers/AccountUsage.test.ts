@@ -8,7 +8,7 @@ import {
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { AccountUsage } from "../Services/AccountUsage.ts";
+import { AccountUsage, type AccountUsageShape } from "../Services/AccountUsage.ts";
 import { AccountUsageLive } from "./AccountUsage.ts";
 
 const CLAUDE = ProviderDriverKind.make("claudeAgent");
@@ -39,6 +39,20 @@ function claudeRateLimitEvent(
   } as ProviderRuntimeEvent;
 }
 
+function claudeGetUsageEvent(response: Record<string, unknown>): ProviderRuntimeEvent {
+  eventCounter += 1;
+  return {
+    type: "account.rate-limits.updated",
+    eventId: EventId.make(`evt-${eventCounter}`),
+    provider: CLAUDE,
+    createdAt: CREATED_AT,
+    threadId: ThreadId.make("thread-1"),
+    providerInstanceId: INSTANCE,
+    payload: { rateLimits: { source: "claude-get-usage", data: response } },
+    providerRefs: {},
+  } as ProviderRuntimeEvent;
+}
+
 function codexRateLimitEvent(snapshot: Record<string, unknown>): ProviderRuntimeEvent {
   eventCounter += 1;
   return {
@@ -53,7 +67,7 @@ function codexRateLimitEvent(snapshot: Record<string, unknown>): ProviderRuntime
   } as ProviderRuntimeEvent;
 }
 
-function run<A>(body: (usage: AccountUsage) => Effect.Effect<A>): Promise<A> {
+function run<A>(body: (usage: AccountUsageShape) => Effect.Effect<A>): Promise<A> {
   return Effect.gen(function* () {
     const usage = yield* AccountUsage;
     return yield* body(usage);
@@ -177,6 +191,41 @@ describe("AccountUsage", () => {
     expect(snapshot?.planLabel).toBe("pro");
     expect(snapshot?.windows.find((window) => window.key === "primary")?.usedPercent).toBe(55);
     expect(snapshot?.windows.find((window) => window.key === "secondary")?.usedPercent).toBe(5);
+  });
+
+  it("prefers the get_usage payload over the streamed event, which can lack utilization", async () => {
+    const snapshots = await run((usage) =>
+      Effect.gen(function* () {
+        // Streamed event with no utilization at all — the exact shape seen
+        // live on an account with overage disabled at the org level. On its
+        // own this contributes nothing.
+        yield* usage.recordRuntimeEvent(
+          claudeRateLimitEvent({
+            status: "allowed",
+            rateLimitType: "five_hour",
+            overageStatus: "rejected",
+            overageDisabledReason: "org_level_disabled_until",
+          }),
+        );
+        const snapshotsAfterStreamedEvent = yield* usage.getSnapshots;
+
+        // The get_usage fallback carries the real percentage.
+        yield* usage.recordRuntimeEvent(
+          claudeGetUsageEvent({
+            subscription_type: "pro",
+            rate_limits: {
+              five_hour: { utilization: 33, resets_at: "2026-08-01T00:00:00.000Z" },
+            },
+          }),
+        );
+
+        return { snapshotsAfterStreamedEvent, final: yield* usage.getSnapshots };
+      }),
+    );
+
+    expect(snapshots.snapshotsAfterStreamedEvent).toEqual([]);
+    expect(snapshots.final[0]?.planLabel).toBe("pro");
+    expect(snapshots.final[0]?.windows[0]?.usedPercent).toBe(33);
   });
 
   it("ignores unrelated events and unrecognized payloads", async () => {

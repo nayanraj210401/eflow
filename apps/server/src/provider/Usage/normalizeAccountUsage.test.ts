@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   formatWindowLabel,
   normalizeAccountLabels,
+  normalizeClaudeGetUsageResponse,
   normalizeClaudeRateLimitEvent,
   normalizeCodexRateLimitsSnapshot,
 } from "./normalizeAccountUsage.ts";
@@ -123,6 +124,22 @@ describe("normalizeClaudeRateLimitEvent", () => {
   });
 
   it("returns nothing when utilization is missing or the payload is unrecognized", () => {
+    // Observed live on an account with overage disabled at the org level: the
+    // event still fires (status/resetsAt/overage fields present) but omits
+    // `utilization` entirely. Dropping the window here is intentional — the
+    // fallback is `normalizeClaudeGetUsageResponse`, which always has a percent.
+    expect(
+      normalizeClaudeRateLimitEvent(
+        claudeEvent({
+          status: "allowed",
+          rateLimitType: "five_hour",
+          overageStatus: "rejected",
+          overageDisabledReason: "org_level_disabled_until",
+          isUsingOverage: false,
+        }),
+        OBSERVED_AT,
+      ),
+    ).toBeUndefined();
     expect(
       normalizeClaudeRateLimitEvent(claudeEvent({ rateLimitType: "five_hour" }), OBSERVED_AT),
     ).toBeUndefined();
@@ -180,6 +197,113 @@ describe("normalizeCodexRateLimitsSnapshot", () => {
   it("returns no windows for an unrecognized payload", () => {
     expect(normalizeCodexRateLimitsSnapshot(null, OBSERVED_AT).windows).toEqual([]);
     expect(normalizeCodexRateLimitsSnapshot({ rateLimits: {} }, OBSERVED_AT).windows).toEqual([]);
+  });
+});
+
+describe("normalizeClaudeGetUsageResponse", () => {
+  it("normalizes every window at once, already 0-100, with ISO reset times", () => {
+    const result = normalizeClaudeGetUsageResponse(
+      {
+        subscription_type: "pro",
+        rate_limits_available: true,
+        rate_limits: {
+          five_hour: { utilization: 33, resets_at: "2026-07-26T18:50:00.000Z" },
+          seven_day: { utilization: 12, resets_at: "2026-08-01T18:29:00.000Z" },
+        },
+      },
+      OBSERVED_AT,
+    );
+
+    expect(result.planLabel).toBe("pro");
+    expect(result.windows).toEqual([
+      {
+        key: "five_hour",
+        label: "5h",
+        usedPercent: 33,
+        resetsAt: "2026-07-26T18:50:00.000Z",
+        windowMinutes: 300,
+        observedAt: OBSERVED_AT,
+      },
+      {
+        key: "seven_day",
+        label: "7d",
+        usedPercent: 12,
+        resetsAt: "2026-08-01T18:29:00.000Z",
+        windowMinutes: 10_080,
+        observedAt: OBSERVED_AT,
+      },
+    ]);
+  });
+
+  it("is the fallback for the case the streamed event can't cover: no utilization, org overage disabled", () => {
+    // This is the exact shape observed live from `rate_limit_event` on an
+    // account with overage disabled at the org level (no `utilization`
+    // field at all). `normalizeClaudeGetUsageResponse` is queried
+    // separately via the `/usage` control request, which always reports a
+    // percentage, so the account still gets a bar.
+    const result = normalizeClaudeGetUsageResponse(
+      {
+        subscription_type: "max",
+        rate_limits_available: true,
+        rate_limits: {
+          five_hour: { utilization: 33, resets_at: "2026-07-26T18:50:00.000Z" },
+        },
+      },
+      OBSERVED_AT,
+    );
+
+    expect(result.windows).toHaveLength(1);
+    expect(result.windows[0]?.usedPercent).toBe(33);
+  });
+
+  it("skips windows with a null utilization or reset time", () => {
+    const result = normalizeClaudeGetUsageResponse(
+      {
+        rate_limits: {
+          five_hour: { utilization: null, resets_at: null },
+          seven_day: { utilization: 5, resets_at: null },
+        },
+      },
+      OBSERVED_AT,
+    );
+
+    expect(result.windows).toHaveLength(1);
+    expect(result.windows[0]?.key).toBe("seven_day");
+    expect(result.windows[0]?.resetsAt).toBeUndefined();
+  });
+
+  it("includes per-model windows, labelled by their display name", () => {
+    const result = normalizeClaudeGetUsageResponse(
+      {
+        rate_limits: {
+          model_scoped: [
+            { display_name: "Fable", utilization: 50, resets_at: "2026-08-01T00:00:00.000Z" },
+          ],
+        },
+      },
+      OBSERVED_AT,
+    );
+
+    expect(result.windows).toEqual([
+      {
+        key: "model:Fable",
+        label: "Fable",
+        usedPercent: 50,
+        resetsAt: "2026-08-01T00:00:00.000Z",
+        observedAt: OBSERVED_AT,
+      },
+    ]);
+  });
+
+  it("returns no windows when rate limits are unavailable (API-key sessions)", () => {
+    expect(
+      normalizeClaudeGetUsageResponse(
+        { rate_limits_available: false, rate_limits: null },
+        OBSERVED_AT,
+      ).windows,
+    ).toEqual([]);
+    expect(normalizeClaudeGetUsageResponse(null, OBSERVED_AT).windows).toEqual([]);
+    expect(normalizeClaudeGetUsageResponse({ nonsense: true }, OBSERVED_AT).windows).toEqual([]);
   });
 });
 

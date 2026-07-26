@@ -187,6 +187,89 @@ export function normalizeCodexRateLimitsSnapshot(
   return { windows, ...(planLabel ? { planLabel } : {}) };
 }
 
+/** Canonical windows read from `SDKControlGetUsageResponse.rate_limits`. */
+const CLAUDE_GET_USAGE_WINDOW_MINUTES: Record<string, number> = {
+  five_hour: 5 * 60,
+  seven_day: 7 * 24 * 60,
+  seven_day_oauth_apps: 7 * 24 * 60,
+  seven_day_opus: 7 * 24 * 60,
+  seven_day_sonnet: 7 * 24 * 60,
+};
+
+function normalizeClaudeGetUsageWindow(
+  key: string,
+  windowMinutes: number | undefined,
+  raw: unknown,
+  observedAt: string,
+): ProviderAccountUsageWindow | undefined {
+  const window = asRecord(raw);
+  if (!window) return undefined;
+  // Unlike the streamed rate_limit_event, this response documents
+  // utilization as already 0-100 — no fraction-to-percent conversion here.
+  const usedPercent = asFiniteNumber(window.utilization);
+  if (usedPercent === undefined) return undefined;
+
+  const resetsAt = asNonEmptyString(window.resets_at);
+  const label = formatWindowLabel(windowMinutes);
+
+  return {
+    key,
+    usedPercent: clampPercent(usedPercent),
+    observedAt,
+    ...(label ? { label } : {}),
+    ...(resetsAt ? { resetsAt } : {}),
+    ...(windowMinutes !== undefined ? { windowMinutes } : {}),
+  };
+}
+
+/**
+ * Normalize the structured `/usage` data (`SDKControlGetUsageResponse`).
+ *
+ * This is the fallback and cold-start source for Claude account usage: the
+ * streamed `rate_limit_event` can omit `utilization` entirely for accounts
+ * with overage disabled at the org level (observed live — the event still
+ * fires with `status`/`resetsAt`, but no percentage), and it only ever
+ * exists after the SDK has something to say mid-session. This response
+ * instead reports every window at once, already as a 0-100 percentage with
+ * an ISO reset time, plus the subscription tier.
+ *
+ * Marked EXPERIMENTAL by the SDK — treated as untyped input here, same as
+ * every other normalizer in this module, so a future shape change degrades
+ * to "no windows" rather than a crash.
+ */
+export function normalizeClaudeGetUsageResponse(
+  raw: unknown,
+  observedAt: string,
+): { windows: ReadonlyArray<ProviderAccountUsageWindow>; planLabel?: string } {
+  const response = asRecord(raw);
+  if (!response) return { windows: [] };
+  const rateLimits = asRecord(response.rate_limits);
+  if (!rateLimits) return { windows: [] };
+
+  const windows: ProviderAccountUsageWindow[] = [];
+  for (const [key, windowMinutes] of Object.entries(CLAUDE_GET_USAGE_WINDOW_MINUTES)) {
+    const window = normalizeClaudeGetUsageWindow(key, windowMinutes, rateLimits[key], observedAt);
+    if (window) windows.push(window);
+  }
+
+  const modelScoped = Array.isArray(rateLimits.model_scoped) ? rateLimits.model_scoped : [];
+  for (const entry of modelScoped) {
+    const record = asRecord(entry);
+    const displayName = record ? asNonEmptyString(record.display_name) : undefined;
+    if (!record || !displayName) continue;
+    const window = normalizeClaudeGetUsageWindow(
+      `model:${displayName}`,
+      undefined,
+      record,
+      observedAt,
+    );
+    if (window) windows.push({ ...window, label: displayName });
+  }
+
+  const planLabel = asNonEmptyString(response.subscription_type);
+  return { windows, ...(planLabel ? { planLabel } : {}) };
+}
+
 /**
  * Normalize an `account.updated` payload into the account/plan labels shown
  * alongside the bars. Covers Codex's `{ account: { authMode, planType } }`.
