@@ -15,6 +15,7 @@ import {
   type PermissionUpdate,
   type SDKMessage,
   type SDKControlGetContextUsageResponse,
+  type SDKControlGetUsageResponse,
   type SDKResultMessage,
   type SettingSource,
   type SDKUserMessage,
@@ -89,6 +90,7 @@ import {
   type ProviderAdapterError,
 } from "../Errors.ts";
 import { type ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
+import { normalizeClaudeTurnUsage } from "../Usage/normalizeTurnUsage.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
 const decodeUnknownJsonStringExit = Schema.decodeUnknownExit(Schema.UnknownFromJsonString);
@@ -210,6 +212,16 @@ interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
   readonly setPermissionMode: (mode: PermissionMode) => Promise<void>;
   readonly setMaxThinkingTokens: (maxThinkingTokens: number | null) => Promise<void>;
   readonly getContextUsage?: () => Promise<SDKControlGetContextUsageResponse>;
+  /**
+   * Structured `/usage` data: authoritative 0-100 rate-limit percentages and
+   * ISO reset times, unlike the streamed `rate_limit_event` which can omit
+   * `utilization` entirely for accounts with overage disabled at the org
+   * level (observed live: the event still fires with `status`/`resetsAt`,
+   * but no `utilization` field at all). Named to match the SDK's own
+   * unstable method exactly, since `context.query` is the real SDK object
+   * and this property isn't renamed on the way in.
+   */
+  readonly usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET?: () => Promise<SDKControlGetUsageResponse>;
   readonly close: () => void;
 }
 
@@ -1793,6 +1805,33 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     return normalizeClaudeContextUsageApiSnapshot(usage, totalProcessedTokens);
   });
 
+  /**
+   * Fetch the structured `/usage` data as the authoritative source for account
+   * rate-limit windows. See the `usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET`
+   * doc comment on `ClaudeQueryRuntime` for why the streamed `rate_limit_event`
+   * alone isn't sufficient.
+   */
+  const queryCurrentAccountUsage = Effect.fn("queryCurrentAccountUsage")(function* (
+    context: ClaudeSessionContext,
+  ) {
+    if (!context.query.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET) {
+      return undefined;
+    }
+
+    // Called through `context.query.<method>?.()`, not a destructured
+    // reference: the SDK's implementation reads internal state off `this`,
+    // so detaching the method into a local binding first (as a plain
+    // `const fn = obj.method` would) throws `Cannot read properties of
+    // undefined (reading 'request')` — observed live during development.
+    return yield* Effect.promise(async () => {
+      try {
+        return await context.query.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET?.();
+      } catch {
+        return undefined;
+      }
+    });
+  });
+
   const emitProposedPlanCompleted = Effect.fn("emitProposedPlanCompleted")(function* (
     context: ClaudeSessionContext,
     input: {
@@ -1887,6 +1926,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       context.lastKnownContextWindow = resultContextWindow;
     }
 
+    // Normalized alongside the raw `usage`/`modelUsage` passthroughs so
+    // consumers get a stable shape without the raw fields losing fidelity.
+    const turnUsageSummary = normalizeClaudeTurnUsage(result);
+
     const maxTokens = resultContextWindow ?? context.lastKnownContextWindow;
     const accumulatedTotalProcessedTokens = claudeTotalProcessedTokens(result?.usage);
     if (accumulatedTotalProcessedTokens !== undefined) {
@@ -1897,6 +1940,24 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       context,
       accumulatedTotalProcessedTokens ?? context.lastKnownTotalProcessedTokens,
     );
+
+    const accountUsageResponse = yield* queryCurrentAccountUsage(context);
+    if (accountUsageResponse) {
+      const accountUsageStamp = yield* makeEventStamp();
+      yield* offerRuntimeEvent({
+        type: "account.rate-limits.updated",
+        eventId: accountUsageStamp.eventId,
+        provider: PROVIDER,
+        createdAt: accountUsageStamp.createdAt,
+        threadId: context.session.threadId,
+        ...(context.session.providerInstanceId
+          ? { providerInstanceId: context.session.providerInstanceId }
+          : {}),
+        payload: {
+          rateLimits: { source: "claude-get-usage", data: accountUsageResponse },
+        },
+      });
+    }
     const resultUsageRecord =
       result?.usage && typeof result.usage === "object" && !Array.isArray(result.usage)
         ? (result.usage as Record<string, unknown>)
@@ -1974,6 +2035,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           ...(typeof result?.total_cost_usd === "number"
             ? { totalCostUsd: result.total_cost_usd }
             : {}),
+          ...(turnUsageSummary ? { usageSummary: turnUsageSummary } : {}),
           ...(errorMessage ? { errorMessage } : {}),
         },
         providerRefs: {},
@@ -2049,6 +2111,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(typeof result?.total_cost_usd === "number"
           ? { totalCostUsd: result.total_cost_usd }
           : {}),
+        ...(turnUsageSummary ? { usageSummary: turnUsageSummary } : {}),
         ...(errorMessage ? { errorMessage } : {}),
       },
       providerRefs: nativeProviderRefs(context),
@@ -2575,6 +2638,11 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       provider: PROVIDER,
       createdAt: stamp.createdAt,
       threadId: context.session.threadId,
+      // Account-scoped telemetry (rate limits) is keyed by instance id, so two
+      // Claude accounts stay separate instead of merging into one snapshot.
+      ...(context.session.providerInstanceId
+        ? { providerInstanceId: context.session.providerInstanceId }
+        : {}),
       ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
       providerRefs: nativeProviderRefs(context),
       raw: {
@@ -2850,6 +2918,11 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       provider: PROVIDER,
       createdAt: stamp.createdAt,
       threadId: context.session.threadId,
+      // Account-scoped telemetry (rate limits) is keyed by instance id, so two
+      // Claude accounts stay separate instead of merging into one snapshot.
+      ...(context.session.providerInstanceId
+        ? { providerInstanceId: context.session.providerInstanceId }
+        : {}),
       ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
       providerRefs: nativeProviderRefs(context),
       raw: {
@@ -3547,7 +3620,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(mcpSession
           ? {
               mcpServers: {
-                "eflob": {
+                eflob: {
                   type: "http",
                   url: mcpSession.endpoint,
                   headers: {

@@ -72,6 +72,15 @@ export function applyServerConfigProjection(
         latestEvent: event,
         source: "live",
       }));
+    case "accountUsage":
+      return Option.map(current, (projection) => ({
+        config: {
+          ...projection.config,
+          accountUsage: event.payload.accountUsage,
+        },
+        latestEvent: event,
+        source: "live",
+      }));
   }
 }
 

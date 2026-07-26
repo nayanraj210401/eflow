@@ -27,6 +27,7 @@ import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@eflob/shared/DrainableWorker";
 
+import { AccountUsage } from "../../provider/Services/AccountUsage.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
 import { ProjectionTurnRepositoryLive } from "../../persistence/Layers/ProjectionTurns.ts";
@@ -613,6 +614,30 @@ export function runtimeEventToActivities(
       ];
     }
 
+    case "turn.completed": {
+      // Persisted as an activity rather than columns on `projection_turns`:
+      // activities load in full with every thread detail, so the per-thread
+      // usage summary needs no extra query, and one row per turn is negligible
+      // next to the tool activities already stored.
+      const usageSummary = event.payload.usageSummary;
+      if (!usageSummary) {
+        return [];
+      }
+
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "turn.usage",
+          summary: "Turn usage",
+          payload: usageSummary,
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
     case "item.updated": {
       if (!isToolLifecycleItemType(event.payload.itemType)) {
         return [];
@@ -691,6 +716,7 @@ const make = Effect.gen(function* () {
   const orchestrationEngine = yield* OrchestrationEngineService;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
   const providerService = yield* ProviderService;
+  const accountUsage = yield* AccountUsage;
   const projectionTurnRepository = yield* ProjectionTurnRepository;
   const serverSettingsService = yield* ServerSettingsService;
   const providerCommandId = (event: ProviderRuntimeEvent, tag: string) =>
@@ -1805,9 +1831,18 @@ const make = Effect.gen(function* () {
   const start: ProviderRuntimeIngestionShape["start"] = () =>
     Effect.gen(function* () {
       yield* Effect.forkScoped(
-        Stream.runForEach(providerService.streamEvents, (event) =>
-          worker.enqueue({ source: "runtime", event }),
-        ),
+        Stream.runForEach(providerService.streamEvents, (event) => {
+          // Account-scoped telemetry is handled here rather than by a second
+          // `streamEvents` subscriber (see CheckpointReactor for why a parallel
+          // subscription is not reliably delivered) and never enters the
+          // thread-scoped pipeline: `processRuntimeEvent` bails when the thread
+          // does not resolve, and this state is ephemeral, so event-sourcing it
+          // would be wrong anyway.
+          if (event.type === "account.rate-limits.updated" || event.type === "account.updated") {
+            return accountUsage.recordRuntimeEvent(event);
+          }
+          return worker.enqueue({ source: "runtime", event });
+        }),
       );
       yield* Effect.forkScoped(
         Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) => {

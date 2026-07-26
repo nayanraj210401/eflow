@@ -50,6 +50,7 @@ import {
   type ProviderAdapterError,
 } from "../Errors.ts";
 import { type CodexAdapterShape } from "../Services/CodexAdapter.ts";
+import { normalizeCodexTurnUsage } from "../Usage/normalizeTurnUsage.ts";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import {
@@ -494,9 +495,21 @@ function mapItemLifecycle(
   };
 }
 
+/**
+ * Per-session carry-over for turn usage. Codex's `turn/completed` notification
+ * has no usage of its own — the numbers only ever arrive on the preceding
+ * `thread/tokenUsage/updated` — so the last reading is held here and attached
+ * when the turn closes.
+ */
+type CodexTurnUsageTracker = {
+  lastTokenUsage?: unknown;
+  readonly model?: string | undefined;
+};
+
 function mapToRuntimeEvents(
   event: ProviderEvent,
   canonicalThreadId: ThreadId,
+  usageTracker?: CodexTurnUsageTracker,
 ): ReadonlyArray<ProviderRuntimeEvent> {
   if (event.kind === "error") {
     if (!event.message) {
@@ -737,6 +750,9 @@ function mapToRuntimeEvents(
       EffectCodexSchema.V2ThreadTokenUsageUpdatedNotification,
       event.payload,
     );
+    if (usageTracker && payload) {
+      usageTracker.lastTokenUsage = payload.tokenUsage.last;
+    }
     const normalizedUsage = payload ? normalizeCodexTokenUsage(payload.tokenUsage) : undefined;
     if (!normalizedUsage) {
       return [];
@@ -773,6 +789,17 @@ function mapToRuntimeEvents(
       return [];
     }
     const errorMessage = trimText(payload.turn.error?.message);
+    const usageSummary = usageTracker
+      ? normalizeCodexTurnUsage({
+          lastUsage: usageTracker.lastTokenUsage,
+          model: usageTracker.model,
+        })
+      : undefined;
+    // Consume the reading so the next turn cannot inherit this turn's tokens
+    // if Codex closes it without sending a fresh usage notification.
+    if (usageTracker) {
+      usageTracker.lastTokenUsage = undefined;
+    }
     return [
       {
         ...runtimeEventBase(event, canonicalThreadId),
@@ -780,6 +807,7 @@ function mapToRuntimeEvents(
         payload: {
           state: toTurnStatus(payload.turn.status),
           ...(errorMessage ? { errorMessage } : {}),
+          ...(usageSummary ? { usageSummary } : {}),
         },
       },
     ];
@@ -1447,10 +1475,16 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           ),
         );
 
+        const turnUsageTracker: CodexTurnUsageTracker = {
+          ...(input.modelSelection?.instanceId === boundInstanceId
+            ? { model: input.modelSelection.model }
+            : {}),
+        };
+
         const eventFiber = yield* Stream.runForEach(runtime.events, (event) =>
           Effect.gen(function* () {
             yield* writeNativeEvent(event);
-            const runtimeEvents = mapToRuntimeEvents(event, event.threadId);
+            const runtimeEvents = mapToRuntimeEvents(event, event.threadId, turnUsageTracker);
             if (runtimeEvents.length === 0) {
               yield* Effect.logDebug("ignoring unhandled Codex provider event", {
                 method: event.method,
