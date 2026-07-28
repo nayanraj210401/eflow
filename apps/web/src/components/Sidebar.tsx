@@ -83,7 +83,7 @@ import {
   useThreadShells,
   useThreadShellsForProjectRefs,
 } from "../state/entities";
-import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
+import { selectThreadHasTerminalGroups, useTerminalDockStore } from "../terminalDockStore";
 import { useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { useThreadDiscoveredPorts } from "../portDiscoveryState";
 import { openDiscoveredPort } from "./preview/openDiscoveredPort";
@@ -106,6 +106,7 @@ import { isModelPickerOpen } from "../modelPickerVisibility";
 import { useShortcutModifierState } from "../shortcutModifierState";
 import { readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
+import { useCenterTabsStore } from "../centerTabsStore";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
 
@@ -1694,6 +1695,15 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       if (isMobile) {
         setOpenMobile(false);
       }
+      const shell = readThreadShell(threadRef);
+      if (shell) {
+        useCenterTabsStore
+          .getState()
+          .openThreadTab(scopeProjectRef(threadRef.environmentId, shell.projectId), {
+            kind: "server",
+            threadRef,
+          });
+      }
       void router.navigate({
         to: "/$environmentId/$threadId",
         params: buildThreadRouteParams(threadRef),
@@ -1739,6 +1749,15 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       setSelectionAnchor(threadKey);
       if (isMobile) {
         setOpenMobile(false);
+      }
+      const shell = readThreadShell(threadRef);
+      if (shell) {
+        useCenterTabsStore
+          .getState()
+          .openThreadTab(scopeProjectRef(threadRef.environmentId, shell.projectId), {
+            kind: "server",
+            threadRef,
+          });
       }
       void router.navigate({
         to: "/$environmentId/$threadId",
@@ -3014,10 +3033,8 @@ export default function Sidebar() {
     [routeDraftThread, routeTarget],
   );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
-  const routeTerminalOpen = useTerminalUiStateStore((state) =>
-    routeThreadRef
-      ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
-      : false,
+  const routeTerminalOpen = useTerminalDockStore((state) =>
+    routeThreadRef ? selectThreadHasTerminalGroups(state.byThreadKey, routeThreadRef) : false,
   );
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const openAddProjectCommandPalette = useCallback(

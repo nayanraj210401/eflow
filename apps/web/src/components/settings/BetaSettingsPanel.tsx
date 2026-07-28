@@ -1,13 +1,48 @@
 import { useEffect, useState } from "react";
 
+import { MAX_MAX_TABS_PER_THREAD, MIN_MAX_TABS_PER_THREAD } from "@eflob/contracts/settings";
+
 import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
 import { Input } from "../ui/input";
+import { Slider } from "../ui/slider";
 import { Switch } from "../ui/switch";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
 const AUTO_SETTLE_MIN_DAYS = 1;
 const AUTO_SETTLE_MAX_DAYS = 90;
 const AUTO_SETTLE_DEFAULT_DAYS = 3;
+
+function MaxTabsPerThreadSlider({
+  value,
+  onCommit,
+}: {
+  value: number;
+  onCommit: (count: number) => void;
+}) {
+  // Local draft so the thumb tracks the drag smoothly; the setting only
+  // commits once per drag (on release), not on every intermediate value.
+  const [draft, setDraft] = useState(value);
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  return (
+    <div className="flex w-full items-center gap-3 sm:w-56">
+      <Slider
+        min={MIN_MAX_TABS_PER_THREAD}
+        max={MAX_MAX_TABS_PER_THREAD}
+        step={1}
+        value={draft}
+        onValueChange={(next) => setDraft(Array.isArray(next) ? (next[0] ?? value) : next)}
+        onValueCommitted={(next) => onCommit(Array.isArray(next) ? (next[0] ?? value) : next)}
+        aria-label="Maximum tabs per thread"
+      />
+      <span className="w-6 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+        {draft}
+      </span>
+    </div>
+  );
+}
 
 function AutoSettleDaysInput({
   value,
@@ -55,11 +90,22 @@ export function BetaSettingsPanel() {
   const sidebarAutoSettleAfterDays = useClientSettings(
     (settings) => settings.sidebarAutoSettleAfterDays,
   );
+  const maxTabsPerThread = useClientSettings((settings) => settings.maxTabsPerThread);
   const updateSettings = useUpdateClientSettings();
 
   return (
     <SettingsPageContainer>
       <SettingsSection title="Beta features">
+        <SettingsRow
+          title="Max tabs per thread"
+          description="How many file/diff/plan/preview tabs can stay open for a single thread at once. Opening past the limit closes the least-recently-used one."
+          control={
+            <MaxTabsPerThreadSlider
+              value={maxTabsPerThread}
+              onCommit={(count) => updateSettings({ maxTabsPerThread: count })}
+            />
+          }
+        />
         <SettingsRow
           title="Sidebar v2"
           description="One flat thread list in creation order. Active work renders as rich cards; settled threads collapse to compact rows. Settling requires an up-to-date server — on older servers threads simply stay active. Switch back any time."
