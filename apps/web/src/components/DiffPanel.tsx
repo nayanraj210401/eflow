@@ -26,14 +26,15 @@ import { openDiffFilePrimaryAction } from "../diffFileActions";
 import { useCheckpointDiff } from "~/lib/checkpointDiffState";
 import { cn } from "~/lib/utils";
 import { selectThreadDiffPanelSelection, useDiffPanelStore } from "../diffPanelStore";
+import { useDiffPanelFileListStore } from "../diffPanelFileListStore";
 import { useTheme } from "../hooks/useTheme";
 import {
-  buildFileDiffRenderKey,
   getDiffCollapseIconClassName,
   getRenderablePatch,
   resolveDiffThemeName,
   resolveFileDiffPath,
 } from "../lib/diffRendering";
+import { buildDiffFileList, sortFileDiffsByPath } from "./diffs/diffFileList";
 import { areAllDiffFilesCollapsed, toggleAllDiffFiles } from "../lib/diffCollapse";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useProject, useThread } from "../state/entities";
@@ -272,9 +273,8 @@ export default function DiffPanel({
   const selectedTurnId = diffSelection.kind === "turn" ? diffSelection.turnId : null;
   const selectedGitScope = diffSelection.kind === "unstaged" ? "unstaged" : "branch";
   const selectedBaseRef = diffSelection.kind === "branch" ? diffSelection.baseRef : null;
-  const selectedFilePath = diffSelection.kind === "turn" ? diffSelection.filePath : null;
-  const selectedFileRevealRequestId =
-    diffSelection.kind === "turn" ? diffSelection.revealRequestId : 0;
+  const selectedFilePath = diffSelection.filePath;
+  const selectedFileRevealRequestId = diffSelection.revealRequestId;
   const selectedTurn =
     selectedTurnId === null
       ? undefined
@@ -430,25 +430,22 @@ export default function DiffPanel({
     if (!renderablePatch || renderablePatch.kind !== "files") {
       return [];
     }
-    return renderablePatch.files.toSorted((left, right) =>
-      resolveFileDiffPath(left).localeCompare(resolveFileDiffPath(right), undefined, {
-        numeric: true,
-        sensitivity: "base",
-      }),
-    );
+    return sortFileDiffsByPath(renderablePatch.files);
   }, [renderablePatch]);
+  const diffFileListEntries = useMemo(() => buildDiffFileList(renderableFiles), [renderableFiles]);
+  useEffect(() => {
+    if (!routeThreadRef) return;
+    useDiffPanelFileListStore.getState().setFileList(routeThreadRef, renderableFiles);
+  }, [routeThreadRef, renderableFiles]);
   const codeViewFiles = useMemo(
     () =>
-      renderableFiles.map((fileDiff) => {
-        const fileKey = buildFileDiffRenderKey(fileDiff);
-        return {
-          fileDiff,
-          filePath: resolveFileDiffPath(fileDiff),
-          fileKey,
-          collapsed: collapsedDiffFileKeys.has(fileKey),
-        };
-      }),
-    [collapsedDiffFileKeys, renderableFiles],
+      diffFileListEntries.map(({ fileDiff, filePath, fileKey }) => ({
+        fileDiff,
+        filePath,
+        fileKey,
+        collapsed: collapsedDiffFileKeys.has(fileKey),
+      })),
+    [collapsedDiffFileKeys, diffFileListEntries],
   );
   const diffFileKeys = useMemo(() => codeViewFiles.map((file) => file.fileKey), [codeViewFiles]);
   const allDiffFilesCollapsed = areAllDiffFilesCollapsed(diffFileKeys, collapsedDiffFileKeys);

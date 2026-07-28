@@ -59,6 +59,20 @@ export default function FileBrowserPanel({
   const entryKindsRef = useRef<ReadonlyMap<string, ProjectEntry["kind"]>>(entryKinds);
   const treePaths = useMemo(() => entries.map(treePath), [entries]);
   const previousTreePathsRef = useRef<readonly string[]>([]);
+  // `useFileTree` below captures `onSelectionChange` (and everything it
+  // closes over) once at setup and does not re-subscribe on every render —
+  // same reason `entryKindsRef` exists. This component is a long-lived
+  // singleton that outlives any single thread/project (it's part of the
+  // singleton `RightSidebar`, never remounted on thread switches), so
+  // without this ref, opening a file shortly after switching threads calls
+  // a stale `onOpenFile` bound to whichever thread/project was active when
+  // the tree was first set up — attributing the newly opened file tab to
+  // the wrong (previous) thread while the tree itself displays the new
+  // project's (correct, freshly refetched) entries.
+  const onOpenFileRef = useRef(onOpenFile);
+  useEffect(() => {
+    onOpenFileRef.current = onOpenFile;
+  }, [onOpenFile]);
 
   // The tree renders rows in shadow DOM and its anchor rect is unreliable, so
   // capture the right-click position ourselves; contextmenu is a composed
@@ -172,7 +186,7 @@ export default function FileBrowserPanel({
       }
       const selectedPath = selectedPaths.at(-1)?.replace(/\/$/, "");
       if (selectedPath && entryKindsRef.current.get(selectedPath) === "file") {
-        onOpenFile(selectedPath);
+        onOpenFileRef.current(selectedPath);
       }
     },
     paths: [],

@@ -78,7 +78,7 @@ import { onOpenCommandPalette } from "../commandPaletteBus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { getLatestThreadForProject, sortThreads } from "../lib/threadSort";
 import { cn, isMacPlatform, isWindowsPlatform, newProjectId } from "../lib/utils";
-import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
+import { selectThreadHasTerminalGroups, useTerminalDockStore } from "../terminalDockStore";
 import { buildThreadRouteParams, resolveThreadRouteTarget } from "../threadRoutes";
 import {
   applyWslEnvironmentConfiguration,
@@ -393,10 +393,8 @@ export function CommandPalette({ children }: { children: ReactNode }) {
     select: (params) => resolveThreadRouteTarget(params),
   });
   const routeThreadRef = routeTarget?.kind === "server" ? routeTarget.threadRef : null;
-  const terminalOpen = useTerminalUiStateStore((state) =>
-    routeThreadRef
-      ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
-      : false,
+  const terminalOpen = useTerminalDockStore((state) =>
+    routeThreadRef ? selectThreadHasTerminalGroups(state.byThreadKey, routeThreadRef) : false,
   );
 
   useEffect(() => {

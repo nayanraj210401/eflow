@@ -24,6 +24,14 @@ import type { DraftThreadEnvMode } from "../composerDraftStore";
 export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "eflob:last-invoked-script-by-project";
 export const MAX_HIDDEN_MOUNTED_TERMINAL_THREADS = 10;
 export const MAX_HIDDEN_MOUNTED_PREVIEW_THREADS = 3;
+/**
+ * Shared eviction budget for backgrounded `CenterTabsHost` thread ("chat")
+ * tab mounts (VSCode-style tab layout redesign, Phase 2 step 2). Reuses the
+ * existing terminal-thread cap as the starting number per the design doc —
+ * both are instances of the same "how many hidden, still-live mounts can we
+ * afford" question, so one shared budget instead of a second magic number.
+ */
+export const MAX_HIDDEN_MOUNTED_CENTER_TAB_THREADS = MAX_HIDDEN_MOUNTED_TERMINAL_THREADS;
 
 export const LastInvokedScriptByProjectSchema = Schema.Record(ProjectId, Schema.String);
 

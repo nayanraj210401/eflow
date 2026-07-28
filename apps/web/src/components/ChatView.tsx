@@ -27,7 +27,6 @@ import {
 } from "@eflob/client-runtime/connection";
 import { effectiveSettled, effectiveSnoozed } from "@eflob/client-runtime/state/thread-settled";
 import {
-  parseScopedThreadKey,
   scopedThreadKey,
   scopeProjectRef,
   scopeThreadRef,
@@ -40,23 +39,13 @@ import {
 import { CHAT_LIST_ANCHOR_OFFSET } from "@eflob/shared/chatList";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@eflob/shared/projectScripts";
 import { truncate } from "@eflob/shared/String";
-import { nextTerminalId, resolveTerminalSessionLabel } from "@eflob/shared/terminalLabels";
+import { nextTerminalId } from "@eflob/shared/terminalLabels";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useAtomValue } from "@effect/atom-react";
-import {
-  lazy,
-  memo,
-  Suspense,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { useShallow } from "zustand/shallow";
 import { useNavigate } from "@tanstack/react-router";
-import { useShallow } from "zustand/react/shallow";
 import {
   isAtomCommandInterrupted,
   mapAtomCommandResult,
@@ -68,7 +57,8 @@ import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
-import { useDiffPanelStore } from "../diffPanelStore";
+import { selectThreadDiffPanelSelection, useDiffPanelStore } from "../diffPanelStore";
+import { selectDiffPanelFileList, useDiffPanelFileListStore } from "../diffPanelFileListStore";
 import {
   collapseExpandedComposerCursor,
   parseStandaloneComposerSlashCommand,
@@ -105,7 +95,6 @@ import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   DEFAULT_THREAD_TERMINAL_ID,
-  MAX_TERMINALS_PER_GROUP,
   type ChatMessage,
   type SessionPhase,
   type Thread,
@@ -133,12 +122,12 @@ import { addBrowserSurface } from "./preview/addBrowserSurface";
 import { closePreviewSession } from "./preview/closePreviewSession";
 import { subscribePreviewAction } from "./preview/previewActionBus";
 import { getConfiguredPreviewUrls } from "./preview/previewEmptyStateLogic";
-import { RightPanelTabs } from "./RightPanelTabs";
+import { useCenterTabsStore } from "../centerTabsStore";
+import type { ThreadRouteTarget } from "../threadRoutes";
 import { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
-import PlanSidebar from "./PlanSidebar";
-import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
+import { RightSidebar } from "./RightSidebar";
 import {
   AlarmClockIcon,
   CheckCircle2Icon,
@@ -151,7 +140,7 @@ import { cn, randomHex } from "~/lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { decodeProjectScriptKeybindingRule } from "~/lib/projectScriptKeybindings";
-import { type NewProjectScriptInput } from "./ProjectScriptsControl";
+import ProjectScriptsControl, { type NewProjectScriptInput } from "./ProjectScriptsControl";
 import {
   buildProjectScript,
   commandForProjectScript,
@@ -160,7 +149,6 @@ import {
 } from "~/projectScripts";
 import { newDraftId, newMessageId, newThreadId } from "~/lib/utils";
 import { getProviderModelCapabilities, resolveSelectableProvider } from "../providerModels";
-import { NO_PROVIDER_MODEL_SELECTION } from "../providerInstances";
 import { useClientSettings, useEnvironmentSettings } from "../hooks/useSettings";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
@@ -191,36 +179,33 @@ import {
 import { appendPreviewAnnotationPrompt } from "../lib/previewAnnotation";
 import { appendReviewCommentsToPrompt, type ReviewCommentContext } from "../reviewCommentContext";
 import { environmentCatalog } from "../connection/catalog";
-import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
+import {
+  selectActiveTerminalDockGroup,
+  selectThreadAllTerminalIds,
+  selectThreadHasTerminalGroups,
+  selectThreadTerminalDockState,
+  TERMINAL_DOCK_MAX_PANES_PER_GROUP,
+  useTerminalDockStore,
+} from "../terminalDockStore";
+import { randomUUID } from "~/lib/utils";
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { projectEnvironment } from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
-import {
-  primaryServerAvailableEditorsAtom,
-  primaryServerKeybindingsAtom,
-  primaryServerSettingsAtom,
-  serverEnvironment,
-} from "../state/server";
+import { primaryServerSettingsAtom, serverEnvironment } from "../state/server";
 import { terminalEnvironment } from "../state/terminal";
 import { threadEnvironment } from "../state/threads";
 import { vcsEnvironment } from "../state/vcs";
 import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
-import {
-  useProject,
-  useProjects,
-  useThread,
-  useThreadProposedPlans,
-  useThreadRefs,
-  useThreadShell,
-} from "../state/entities";
+import { useProjects, useThreadProposedPlans, useThreadShell } from "../state/entities";
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
-import { ChatHeader } from "./chat/ChatHeader";
-import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
+import { useT3ProjectFileScripts } from "~/hooks/useT3ProjectFileScripts";
+import { useRightSidebarController } from "../hooks/useRightSidebarController";
+import { useActiveThreadResolution } from "../hooks/useActiveThreadResolution";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { NoActiveThreadState } from "./NoActiveThreadState";
 import { resolveEffectiveEnvMode, resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
@@ -241,10 +226,8 @@ import {
   runMobileComposerTransition,
 } from "./chat/draftHeroTransition";
 import {
-  MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
   branchMismatchKey,
   buildExpiredTerminalContextToastCopy,
-  buildLocalDraftThread,
   buildThreadTurnInterruptInput,
   collectUserMessageBlobPreviewUrls,
   createLocalDispatchSnapshot,
@@ -261,7 +244,6 @@ import {
   cloneComposerImageForRetry,
   deriveLockedProvider,
   readFileAsDataUrl,
-  reconcileMountedTerminalThreadIds,
   resolveThreadMetadataUpdateForNextTurn,
   resolveSendEnvMode,
   revokeBlobPreviewUrl,
@@ -271,7 +253,6 @@ import {
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useComposerHandleContext } from "../composerHandleContext";
 import { sanitizeThreadErrorMessage } from "~/rpc/transportError";
-import { RightPanelSheet } from "./RightPanelSheet";
 import { previewEnvironment } from "../state/preview";
 import { useAtomCommand } from "../state/use-atom-command";
 import { Button } from "./ui/button";
@@ -374,12 +355,6 @@ function useDraftHeroLayoutTransition(isDraftHeroState: boolean) {
 
   return [attachTransitionGroupRef, attachComposerAnchorRef, captureComposerRect] as const;
 }
-const PreviewPanel = lazy(() =>
-  import("./preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
-);
-const DiffPanel = lazy(() => import("./DiffPanel"));
-const FilePreviewPanel = lazy(() => import("./files/FilePreviewPanel"));
-const EMPTY_PENDING_FILE_SURFACE_IDS: ReadonlySet<string> = new Set();
 const TYPE_TO_FOCUS_EDITABLE_SELECTOR = [
   "input",
   "textarea",
@@ -460,6 +435,19 @@ type ChatViewProps =
       forceExpandedMobileComposer?: boolean;
       routeKind: "server";
       draftId?: never;
+      /**
+       * VSCode-style tab layout redesign, Phase 2 step 2: when `true`, this
+       * `ChatView` instance renders only its chat-column content and skips
+       * mounting its own `<RightSidebar>` — the caller (e.g.
+       * `CenterTabsHostRoot`) owns the singleton `RightSidebar` instead. All
+       * internal hook calls (`useActiveThreadResolution`,
+       * `useRightSidebarController`) still run unconditionally so chat-column
+       * UI that depends on their outputs (e.g. `expandedImage`,
+       * `panelToggleControls`) keeps working; only the `<RightSidebar>` mount
+       * itself is skipped. Defaults to `false`, preserving today's behavior
+       * exactly for every existing (non-embedded) call site.
+       */
+      embedded?: boolean;
     }
   | {
       environmentId: EnvironmentId;
@@ -469,6 +457,7 @@ type ChatViewProps =
       forceExpandedMobileComposer?: boolean;
       routeKind: "draft";
       draftId: DraftId;
+      embedded?: boolean;
     };
 
 interface TerminalLaunchContext {
@@ -477,7 +466,7 @@ interface TerminalLaunchContext {
   worktreePath: string | null;
 }
 
-type PersistentTerminalLaunchContext = Pick<TerminalLaunchContext, "cwd" | "worktreePath">;
+export type PersistentTerminalLaunchContext = Pick<TerminalLaunchContext, "cwd" | "worktreePath">;
 
 function useLocalDispatchState(input: {
   activeThread: Thread | undefined;
@@ -544,565 +533,6 @@ function useLocalDispatchState(input: {
   };
 }
 
-/** Same terminal ids (order ignored) — avoids reconcile when only server session ordering differs. */
-function terminalIdListsEqual(left: readonly string[], right: readonly string[]): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-  if (left.length === 0) {
-    return true;
-  }
-  const sortedLeft = left.toSorted((a, b) => a.localeCompare(b));
-  const sortedRight = right.toSorted((a, b) => a.localeCompare(b));
-  for (let index = 0; index < sortedLeft.length; index += 1) {
-    if (sortedLeft[index] !== sortedRight[index]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
- * Server knows about fewer sessions than the client, but every server id still exists locally.
- * Typical right after `terminal.open`: known-session list lags; reconciling would drop the new id
- * and later re-add it as a separate group (no split layout).
- */
-function serverTerminalIdsStrictSubsetOfClient(
-  serverIds: readonly string[],
-  clientIds: readonly string[],
-): boolean {
-  if (serverIds.length >= clientIds.length || clientIds.length === 0) {
-    return false;
-  }
-  const clientSet = new Set(clientIds);
-  for (const id of serverIds) {
-    if (!clientSet.has(id)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-interface PersistentThreadTerminalDrawerProps {
-  threadRef: { environmentId: EnvironmentId; threadId: ThreadId };
-  threadId: ThreadId;
-  visible: boolean;
-  launchContext: PersistentTerminalLaunchContext | null;
-  focusRequestId: number;
-  splitShortcutLabel: string | undefined;
-  splitVerticalShortcutLabel: string | undefined;
-  newShortcutLabel: string | undefined;
-  closeShortcutLabel: string | undefined;
-  keybindings: ResolvedKeybindingsConfig;
-  onAddTerminalContext: (selection: TerminalContextSelection) => void;
-}
-
-const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerminalDrawer({
-  threadRef,
-  threadId,
-  visible,
-  launchContext,
-  focusRequestId,
-  splitShortcutLabel,
-  splitVerticalShortcutLabel,
-  newShortcutLabel,
-  closeShortcutLabel,
-  keybindings,
-  onAddTerminalContext,
-}: PersistentThreadTerminalDrawerProps) {
-  const openTerminal = useAtomCommand(terminalEnvironment.open, "terminal open");
-  const writeTerminal = useAtomCommand(terminalEnvironment.write, "terminal write");
-  const closeTerminalMutation = useAtomCommand(terminalEnvironment.close, "terminal close");
-  const serverThread = useThread(threadRef);
-  const draftThread = useComposerDraftStore((store) => store.getDraftThreadByRef(threadRef));
-  const projectRef = serverThread
-    ? scopeProjectRef(serverThread.environmentId, serverThread.projectId)
-    : draftThread
-      ? scopeProjectRef(draftThread.environmentId, draftThread.projectId)
-      : null;
-  const project = useProject(projectRef);
-  const terminalUiState = useTerminalUiStateStore((state) =>
-    selectThreadTerminalUiState(state.terminalUiStateByThreadKey, threadRef),
-  );
-  const knownTerminalSessions = useKnownTerminalSessions({
-    environmentId: threadRef.environmentId,
-    threadId,
-  });
-  const panelSurfaces = useRightPanelStore(
-    (state) => selectThreadRightPanelState(state.byThreadKey, threadRef).surfaces,
-  );
-  const panelTerminalIds = useMemo(
-    () =>
-      new Set(
-        panelSurfaces.flatMap((surface) =>
-          surface.kind === "terminal" ? surface.terminalIds : [],
-        ),
-      ),
-    [panelSurfaces],
-  );
-  const drawerTerminalSessions = useMemo(
-    () =>
-      knownTerminalSessions.filter((session) => !panelTerminalIds.has(session.target.terminalId)),
-    [knownTerminalSessions, panelTerminalIds],
-  );
-  const terminalLabelsById = useMemo(() => {
-    const next = new Map<string, string>();
-    for (const session of drawerTerminalSessions) {
-      next.set(
-        session.target.terminalId,
-        resolveTerminalSessionLabel(session.target.terminalId, session.state.summary),
-      );
-    }
-    return next;
-  }, [drawerTerminalSessions]);
-  const terminalLaunchLocationsById = useMemo(() => {
-    const next = new Map<
-      string,
-      {
-        readonly cwd: string;
-        readonly worktreePath: string | null;
-        readonly runtimeEnv: Record<string, string>;
-      }
-    >();
-    if (!project) {
-      return next;
-    }
-
-    for (const session of drawerTerminalSessions) {
-      const summary = session.state.summary;
-      if (!summary) {
-        continue;
-      }
-      const worktreePathForLaunch =
-        launchContext !== null ? launchContext.worktreePath : summary.worktreePath;
-      next.set(session.target.terminalId, {
-        cwd: launchContext?.cwd ?? summary.cwd,
-        worktreePath: worktreePathForLaunch,
-        runtimeEnv: projectScriptRuntimeEnv({
-          project: { cwd: project.workspaceRoot },
-          worktreePath: worktreePathForLaunch,
-        }),
-      });
-    }
-
-    return next;
-  }, [drawerTerminalSessions, launchContext, project]);
-  const serverOrderedTerminalIds = useMemo(
-    () => drawerTerminalSessions.map((session) => session.target.terminalId),
-    [drawerTerminalSessions],
-  );
-  const storeSetTerminalHeight = useTerminalUiStateStore((state) => state.setTerminalHeight);
-  const storeSplitTerminal = useTerminalUiStateStore((state) => state.splitTerminal);
-  const storeSplitTerminalVertical = useTerminalUiStateStore(
-    (state) => state.splitTerminalVertical,
-  );
-  const storeNewTerminal = useTerminalUiStateStore((state) => state.newTerminal);
-  const storeSetActiveTerminal = useTerminalUiStateStore((state) => state.setActiveTerminal);
-  const storeCloseTerminal = useTerminalUiStateStore((state) => state.closeTerminal);
-  const reconcileTerminalIds = useTerminalUiStateStore((state) => state.reconcileTerminalIds);
-
-  useEffect(() => {
-    if (terminalIdListsEqual(serverOrderedTerminalIds, terminalUiState.terminalIds)) {
-      return;
-    }
-    if (
-      serverTerminalIdsStrictSubsetOfClient(serverOrderedTerminalIds, terminalUiState.terminalIds)
-    ) {
-      return;
-    }
-    reconcileTerminalIds(threadRef, serverOrderedTerminalIds);
-  }, [reconcileTerminalIds, serverOrderedTerminalIds, terminalUiState.terminalIds, threadRef]);
-  const [localFocusRequestId, setLocalFocusRequestId] = useState(0);
-  const worktreePath = serverThread?.worktreePath ?? draftThread?.worktreePath ?? null;
-  const effectiveWorktreePath = useMemo(() => {
-    if (launchContext !== null) {
-      return launchContext.worktreePath;
-    }
-    return worktreePath;
-  }, [launchContext, worktreePath]);
-  const cwd = useMemo(
-    () =>
-      launchContext?.cwd ??
-      (project
-        ? projectScriptCwd({
-            project: { cwd: project.workspaceRoot },
-            worktreePath: effectiveWorktreePath,
-          })
-        : null),
-    [effectiveWorktreePath, launchContext?.cwd, project],
-  );
-  const runtimeEnv = useMemo(
-    () =>
-      project
-        ? projectScriptRuntimeEnv({
-            project: { cwd: project.workspaceRoot },
-            worktreePath: effectiveWorktreePath,
-          })
-        : {},
-    [effectiveWorktreePath, project],
-  );
-
-  const bumpFocusRequestId = useCallback(() => {
-    if (!visible) {
-      return;
-    }
-    setLocalFocusRequestId((value) => value + 1);
-  }, [visible]);
-
-  const setTerminalHeight = useCallback(
-    (height: number) => {
-      storeSetTerminalHeight(threadRef, height);
-    },
-    [storeSetTerminalHeight, threadRef],
-  );
-
-  const splitTerminal = useCallback(() => {
-    if (!cwd) {
-      return;
-    }
-    const terminalId = nextTerminalId(serverOrderedTerminalIds);
-    storeSplitTerminal(threadRef, terminalId);
-    bumpFocusRequestId();
-    void openTerminal({
-      environmentId: threadRef.environmentId,
-      input: {
-        threadId,
-        terminalId,
-        cwd,
-        ...(effectiveWorktreePath != null ? { worktreePath: effectiveWorktreePath } : {}),
-        env: runtimeEnv,
-      },
-    });
-  }, [
-    bumpFocusRequestId,
-    cwd,
-    effectiveWorktreePath,
-    runtimeEnv,
-    serverOrderedTerminalIds,
-    storeSplitTerminal,
-    threadId,
-    threadRef,
-    openTerminal,
-  ]);
-  const splitTerminalVertical = useCallback(() => {
-    if (!cwd) {
-      return;
-    }
-    const terminalId = nextTerminalId(serverOrderedTerminalIds);
-    storeSplitTerminalVertical(threadRef, terminalId);
-    bumpFocusRequestId();
-    void openTerminal({
-      environmentId: threadRef.environmentId,
-      input: {
-        threadId,
-        terminalId,
-        cwd,
-        ...(effectiveWorktreePath != null ? { worktreePath: effectiveWorktreePath } : {}),
-        env: runtimeEnv,
-      },
-    });
-  }, [
-    bumpFocusRequestId,
-    cwd,
-    effectiveWorktreePath,
-    openTerminal,
-    runtimeEnv,
-    serverOrderedTerminalIds,
-    storeSplitTerminalVertical,
-    threadId,
-    threadRef,
-  ]);
-
-  const createNewTerminal = useCallback(() => {
-    if (!cwd) {
-      return;
-    }
-    const terminalId = nextTerminalId(serverOrderedTerminalIds);
-    storeNewTerminal(threadRef, terminalId);
-    bumpFocusRequestId();
-    void openTerminal({
-      environmentId: threadRef.environmentId,
-      input: {
-        threadId,
-        terminalId,
-        cwd,
-        ...(effectiveWorktreePath != null ? { worktreePath: effectiveWorktreePath } : {}),
-        env: runtimeEnv,
-      },
-    });
-  }, [
-    bumpFocusRequestId,
-    cwd,
-    effectiveWorktreePath,
-    runtimeEnv,
-    serverOrderedTerminalIds,
-    storeNewTerminal,
-    threadId,
-    threadRef,
-    openTerminal,
-  ]);
-
-  const activateTerminal = useCallback(
-    (terminalId: string) => {
-      storeSetActiveTerminal(threadRef, terminalId);
-      bumpFocusRequestId();
-    },
-    [bumpFocusRequestId, storeSetActiveTerminal, threadRef],
-  );
-
-  const closeTerminal = useCallback(
-    (terminalId: string) => {
-      const fallbackExitWrite = () =>
-        writeTerminal({
-          environmentId: threadRef.environmentId,
-          input: { threadId, terminalId, data: "exit\n" },
-        });
-
-      void (async () => {
-        const closeResult = await closeTerminalMutation({
-          environmentId: threadRef.environmentId,
-          input: {
-            threadId,
-            terminalId,
-            deleteHistory: true,
-          },
-        });
-        if (closeResult._tag === "Failure" && !isAtomCommandInterrupted(closeResult)) {
-          await fallbackExitWrite();
-        }
-      })();
-
-      storeCloseTerminal(threadRef, terminalId);
-      bumpFocusRequestId();
-    },
-    [
-      bumpFocusRequestId,
-      storeCloseTerminal,
-      threadId,
-      threadRef,
-      closeTerminalMutation,
-      writeTerminal,
-    ],
-  );
-
-  const handleAddTerminalContext = useCallback(
-    (selection: TerminalContextSelection) => {
-      if (!visible) {
-        return;
-      }
-      onAddTerminalContext(selection);
-    },
-    [onAddTerminalContext, visible],
-  );
-
-  if (!project || !terminalUiState.terminalOpen || !cwd) {
-    return null;
-  }
-
-  return (
-    <div className={visible ? undefined : "hidden"}>
-      <ThreadTerminalDrawer
-        threadRef={threadRef}
-        threadId={threadId}
-        cwd={cwd}
-        worktreePath={effectiveWorktreePath}
-        runtimeEnv={runtimeEnv}
-        visible={visible}
-        height={terminalUiState.terminalHeight}
-        // Known-session order is MRU and changes on focus; persisted store order keeps sidebar labels stable.
-        terminalIds={terminalUiState.terminalIds}
-        activeTerminalId={terminalUiState.activeTerminalId}
-        terminalGroups={terminalUiState.terminalGroups}
-        activeTerminalGroupId={terminalUiState.activeTerminalGroupId}
-        focusRequestId={focusRequestId + localFocusRequestId + (visible ? 1 : 0)}
-        onSplitTerminal={splitTerminal}
-        onSplitTerminalVertical={splitTerminalVertical}
-        onNewTerminal={createNewTerminal}
-        splitShortcutLabel={visible ? splitShortcutLabel : undefined}
-        splitVerticalShortcutLabel={visible ? splitVerticalShortcutLabel : undefined}
-        newShortcutLabel={visible ? newShortcutLabel : undefined}
-        closeShortcutLabel={visible ? closeShortcutLabel : undefined}
-        keybindings={keybindings}
-        onActiveTerminalChange={activateTerminal}
-        onCloseTerminal={closeTerminal}
-        onHeightChange={setTerminalHeight}
-        onAddTerminalContext={handleAddTerminalContext}
-        terminalLabelsById={terminalLabelsById}
-        terminalLaunchLocationsById={terminalLaunchLocationsById}
-      />
-    </div>
-  );
-});
-
-interface PersistentThreadTerminalPanelProps {
-  threadRef: ScopedThreadRef;
-  surface: Extract<RightPanelSurface, { kind: "terminal" }>;
-  launchContext: PersistentTerminalLaunchContext | null;
-  focusRequestId: number;
-  keybindings: ResolvedKeybindingsConfig;
-  onAddTerminalContext: (selection: TerminalContextSelection) => void;
-  onSplitTerminal: () => void;
-  onSplitTerminalVertical: () => void;
-  onNewTerminal: () => void;
-  onActiveTerminalChange: (terminalId: string) => void;
-  onCloseTerminal: (terminalId: string) => void;
-  splitShortcutLabel?: string | undefined;
-  splitVerticalShortcutLabel?: string | undefined;
-  newShortcutLabel?: string | undefined;
-  closeShortcutLabel?: string | undefined;
-}
-
-const PersistentThreadTerminalPanel = memo(function PersistentThreadTerminalPanel({
-  threadRef,
-  surface,
-  launchContext,
-  focusRequestId,
-  keybindings,
-  onAddTerminalContext,
-  onSplitTerminal,
-  onSplitTerminalVertical,
-  onNewTerminal,
-  onActiveTerminalChange,
-  onCloseTerminal,
-  splitShortcutLabel,
-  splitVerticalShortcutLabel,
-  newShortcutLabel,
-  closeShortcutLabel,
-}: PersistentThreadTerminalPanelProps) {
-  const serverThread = useThread(threadRef);
-  const draftThread = useComposerDraftStore((store) => store.getDraftThreadByRef(threadRef));
-  const projectRef = serverThread
-    ? scopeProjectRef(serverThread.environmentId, serverThread.projectId)
-    : draftThread
-      ? scopeProjectRef(draftThread.environmentId, draftThread.projectId)
-      : null;
-  const project = useProject(projectRef);
-  const knownTerminalSessions = useKnownTerminalSessions({
-    environmentId: threadRef.environmentId,
-    threadId: threadRef.threadId,
-  });
-  const threadWorktreePath = serverThread?.worktreePath ?? draftThread?.worktreePath ?? null;
-  const activeSummary =
-    knownTerminalSessions.find((session) => session.target.terminalId === surface.activeTerminalId)
-      ?.state.summary ?? null;
-  const worktreePath =
-    launchContext?.worktreePath ?? activeSummary?.worktreePath ?? threadWorktreePath;
-  const cwd = useMemo(
-    () =>
-      launchContext?.cwd ??
-      activeSummary?.cwd ??
-      (project
-        ? projectScriptCwd({
-            project: { cwd: project.workspaceRoot },
-            worktreePath,
-          })
-        : null),
-    [activeSummary?.cwd, launchContext?.cwd, project, worktreePath],
-  );
-  const runtimeEnv = useMemo(
-    () =>
-      project
-        ? projectScriptRuntimeEnv({
-            project: { cwd: project.workspaceRoot },
-            worktreePath,
-          })
-        : {},
-    [project, worktreePath],
-  );
-  const terminalLabelsById = useMemo(() => {
-    const labels = new Map<string, string>();
-    for (const terminalId of surface.terminalIds) {
-      const summary =
-        knownTerminalSessions.find((session) => session.target.terminalId === terminalId)?.state
-          .summary ?? null;
-      labels.set(terminalId, resolveTerminalSessionLabel(terminalId, summary));
-    }
-    return labels;
-  }, [knownTerminalSessions, surface.terminalIds]);
-  const terminalLaunchLocationsById = useMemo(() => {
-    const locations = new Map<
-      string,
-      {
-        readonly cwd: string;
-        readonly worktreePath: string | null;
-        readonly runtimeEnv: Record<string, string>;
-      }
-    >();
-    for (const terminalId of surface.terminalIds) {
-      const summary =
-        knownTerminalSessions.find((session) => session.target.terminalId === terminalId)?.state
-          .summary ?? null;
-      const terminalWorktreePath =
-        launchContext?.worktreePath ?? summary?.worktreePath ?? threadWorktreePath;
-      const terminalCwd =
-        launchContext?.cwd ??
-        summary?.cwd ??
-        (project
-          ? projectScriptCwd({
-              project: { cwd: project.workspaceRoot },
-              worktreePath: terminalWorktreePath,
-            })
-          : null);
-      if (!terminalCwd || !project) continue;
-      locations.set(terminalId, {
-        cwd: terminalCwd,
-        worktreePath: terminalWorktreePath,
-        runtimeEnv: projectScriptRuntimeEnv({
-          project: { cwd: project.workspaceRoot },
-          worktreePath: terminalWorktreePath,
-        }),
-      });
-    }
-    return locations;
-  }, [
-    knownTerminalSessions,
-    launchContext?.cwd,
-    launchContext?.worktreePath,
-    project,
-    surface.terminalIds,
-    threadWorktreePath,
-  ]);
-
-  if (!project || !cwd) return null;
-
-  return (
-    <ThreadTerminalDrawer
-      mode="panel"
-      threadRef={threadRef}
-      threadId={threadRef.threadId}
-      cwd={cwd}
-      worktreePath={worktreePath}
-      runtimeEnv={runtimeEnv}
-      height={0}
-      terminalIds={surface.terminalIds}
-      activeTerminalId={surface.activeTerminalId}
-      terminalGroups={[
-        {
-          id: surface.id,
-          terminalIds: surface.terminalIds,
-          ...(surface.splitDirection === "vertical" ? { splitDirection: "vertical" as const } : {}),
-        },
-      ]}
-      activeTerminalGroupId={surface.id}
-      focusRequestId={focusRequestId}
-      onSplitTerminal={onSplitTerminal}
-      onSplitTerminalVertical={onSplitTerminalVertical}
-      onNewTerminal={onNewTerminal}
-      splitShortcutLabel={splitShortcutLabel}
-      splitVerticalShortcutLabel={splitVerticalShortcutLabel}
-      newShortcutLabel={newShortcutLabel}
-      closeShortcutLabel={closeShortcutLabel}
-      onActiveTerminalChange={onActiveTerminalChange}
-      onCloseTerminal={onCloseTerminal}
-      onHeightChange={() => undefined}
-      onAddTerminalContext={onAddTerminalContext}
-      terminalLabelsById={terminalLabelsById}
-      terminalLaunchLocationsById={terminalLaunchLocationsById}
-      keybindings={keybindings}
-    />
-  );
-});
-
 // Errors surface through two maps (draft-keyed and thread-keyed) whose entries
 // can race around promotion, so each write carries its time to let the latest
 // one win when they collide.
@@ -1123,6 +553,7 @@ function ChatViewContent(props: ChatViewProps) {
     onDiffPanelOpen,
     reserveTitleBarControlInset = true,
     forceExpandedMobileComposer = false,
+    embedded = false,
   } = props;
   const draftId = routeKind === "draft" ? props.draftId : null;
   const routeThreadRef = useMemo(
@@ -1130,6 +561,50 @@ function ChatViewContent(props: ChatViewProps) {
     [environmentId, threadId],
   );
   const routeThreadKey = useMemo(() => scopedThreadKey(routeThreadRef), [routeThreadRef]);
+  // Hoisted thread/draft/project/git resolution prelude (see
+  // `useActiveThreadResolution.ts`) — placed early so everything below,
+  // including effects, sees already-resolved values, matching how
+  // `useRightSidebarController` is hoisted.
+  const {
+    composerDraftTarget,
+    serverThread,
+    draftThread,
+    localDraftThread,
+    isServerThread,
+    activeThread,
+    isLocalDraftThread,
+    activeThreadId,
+    activeThreadRef,
+    activeThreadKey,
+    activeProjectRef,
+    activeProject,
+    activeProjectCwd,
+    activeThreadWorktreePath,
+    activeWorkspaceRoot,
+    gitCwd,
+    gitStatusQuery,
+    isGitRepo,
+    timestampFormat,
+    keybindings,
+    availableEditors,
+  } = useActiveThreadResolution({
+    environmentId,
+    threadId,
+    routeKind,
+    draftId,
+    routeThreadRef,
+  });
+  // The "Add action" / scripts menu control isn't hoisted into the singleton
+  // topbar with the rest of `ChatHeader`'s actions (`OpenInPicker`,
+  // `GitActionsControl`) — `runProjectScript` opens/writes to this thread's
+  // live terminal dock state and reports failures via this specific
+  // `ChatView` instance's local `setThreadError`, which only exists while
+  // this instance is mounted (it can be evicted while backgrounded per
+  // `reconcileRetainedMountedThreadIds`), so it stays per-thread here.
+  const projectScriptFileScripts = useT3ProjectFileScripts(
+    activeThread?.environmentId ?? environmentId,
+    activeProject?.scripts ? activeProjectCwd : null,
+  );
   const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: false });
   const upsertKeybinding = useAtomCommand(serverEnvironment.upsertKeybinding, {
     reportFailure: false,
@@ -1171,9 +646,6 @@ function ChatViewContent(props: ChatViewProps) {
     () => new Map(environments.map((environment) => [environment.environmentId, environment])),
     [environments],
   );
-  const composerDraftTarget: ScopedThreadRef | DraftId =
-    routeKind === "server" ? routeThreadRef : props.draftId;
-  const serverThread = useThread(routeThreadRef);
   const markThreadVisited = useUiStateStore((store) => store.markThreadVisited);
   const activeThreadLastVisitedAt = useUiStateStore(
     (store) => store.threadLastVisitedAtById[routeThreadKey],
@@ -1186,7 +658,6 @@ function ChatViewContent(props: ChatViewProps) {
   const setStickyComposerModelSelection = useComposerDraftStore(
     (store) => store.setStickyModelSelection,
   );
-  const timestampFormat = settings.timestampFormat;
   const autoOpenPlanSidebar = settings.autoOpenPlanSidebar;
   const navigate = useNavigate();
   const { resolvedTheme } = useTheme();
@@ -1226,13 +697,6 @@ function ChatViewContent(props: ChatViewProps) {
   const setLogicalProjectDraftThreadId = useComposerDraftStore(
     (store) => store.setLogicalProjectDraftThreadId,
   );
-  const draftThread = useComposerDraftStore((store) =>
-    routeKind === "server"
-      ? store.getDraftSessionByRef(routeThreadRef)
-      : draftId
-        ? store.getDraftSession(draftId)
-        : null,
-  );
   const promptRef = useRef("");
   const composerImagesRef = useRef<ComposerImageAttachment[]>([]);
   const composerTerminalContextsRef = useRef<TerminalContextDraft[]>([]);
@@ -1240,7 +704,6 @@ function ChatViewContent(props: ChatViewProps) {
   const localComposerRef = useRef<ChatComposerHandle | null>(null);
   const composerRef = useComposerHandleContext() ?? localComposerRef;
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-  const [expandedImage, setExpandedImage] = useState<ExpandedImagePreview | null>(null);
   const [optimisticUserMessages, setOptimisticUserMessages] = useState<ChatMessage[]>([]);
   const optimisticUserMessagesRef = useRef(optimisticUserMessages);
   optimisticUserMessagesRef.current = optimisticUserMessages;
@@ -1252,9 +715,6 @@ function ChatViewContent(props: ChatViewProps) {
   >({});
   const [isConnecting, _setIsConnecting] = useState(false);
   const [isRevertingCheckpoint, setIsRevertingCheckpoint] = useState(false);
-  const [maximizedRightPanelThreadKey, setMaximizedRightPanelThreadKey] = useState<string | null>(
-    null,
-  );
   const [respondingRequestIds, setRespondingRequestIds] = useState<ApprovalRequestId[]>([]);
   const [respondingUserInputRequestIds, setRespondingUserInputRequestIds] = useState<
     ApprovalRequestId[]
@@ -1270,11 +730,8 @@ function ChatViewContent(props: ChatViewProps) {
   // When set, the thread-change reset effect will open the sidebar instead of closing it.
   // Used by "Implement in a new thread" to carry the sidebar-open intent across navigation.
   const planSidebarOpenOnNextThreadRef = useRef(false);
-  const [terminalFocusRequestId, setTerminalFocusRequestId] = useState(0);
   const [pullRequestDialogState, setPullRequestDialogState] =
     useState<PullRequestDialogState | null>(null);
-  const [terminalUiLaunchContext, setTerminalUiLaunchContext] =
-    useState<TerminalLaunchContext | null>(null);
   const [attachmentPreviewHandoffByMessageId, setAttachmentPreviewHandoffByMessageId] = useState<
     Record<string, string[]>
   >({});
@@ -1318,48 +775,26 @@ function ChatViewContent(props: ChatViewProps) {
     return () => observer.disconnect();
   }, [composerOverlayElement]);
 
-  const terminalUiState = useTerminalUiStateStore((state) =>
-    selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef),
+  // There is exactly one terminal UI now (the terminal dock at the bottom of
+  // the right sidebar, backed by `terminalDockStore`/`TerminalDockPanel`).
+  // `routeThreadTerminalOpen` mirrors the old terminal-drawer "terminalOpen"
+  // boolean for command-palette/keybinding shortcut context and the
+  // header "toggle terminal" affordance: it's true when this thread has at
+  // least one terminal dock group (tab).
+  const routeThreadTerminalOpen = useTerminalDockStore((state) =>
+    selectThreadHasTerminalGroups(state.byThreadKey, routeThreadRef),
   );
-  const openTerminalThreadKeys = useTerminalUiStateStore(
-    useShallow((state) =>
-      Object.entries(state.terminalUiStateByThreadKey).flatMap(
-        ([nextThreadKey, nextTerminalUiState]) =>
-          nextTerminalUiState.terminalOpen ? [nextThreadKey] : [],
-      ),
-    ),
+  const routeThreadActiveTerminalDockGroup = useTerminalDockStore((state) =>
+    selectActiveTerminalDockGroup(state.byThreadKey, routeThreadRef),
   );
-  const storeSetTerminalOpen = useTerminalUiStateStore((s) => s.setTerminalOpen);
-  const storeEnsureTerminal = useTerminalUiStateStore((state) => state.ensureTerminal);
-  const storeSplitTerminal = useTerminalUiStateStore((s) => s.splitTerminal);
-  const storeSplitTerminalVertical = useTerminalUiStateStore((s) => s.splitTerminalVertical);
-  const storeNewTerminal = useTerminalUiStateStore((s) => s.newTerminal);
-  const storeSetActiveTerminal = useTerminalUiStateStore((s) => s.setActiveTerminal);
-  const storeCloseTerminal = useTerminalUiStateStore((s) => s.closeTerminal);
-  const serverThreadRefs = useThreadRefs();
-  const serverThreadKeys = useMemo(() => serverThreadRefs.map(scopedThreadKey), [serverThreadRefs]);
-  const draftThreadsByThreadKey = useComposerDraftStore((store) => store.draftThreadsByThreadKey);
-  const draftThreadKeys = useMemo(
-    () =>
-      Object.values(draftThreadsByThreadKey).map((draftThread) =>
-        scopedThreadKey(scopeThreadRef(draftThread.environmentId, draftThread.threadId)),
-      ),
-    [draftThreadsByThreadKey],
+  // `selectThreadAllTerminalIds` derives a new array on every call (it's a
+  // `flatMap` over the store's groups), so this selector needs a shallow
+  // (by-value) equality check -- otherwise `useSyncExternalStore` sees a
+  // "changed" snapshot on every read and re-renders in an infinite loop.
+  const routeThreadAllTerminalIds = useTerminalDockStore(
+    useShallow((state) => selectThreadAllTerminalIds(state.byThreadKey, routeThreadRef)),
   );
-  const [mountedTerminalThreadKeys, setMountedTerminalThreadKeys] = useState<string[]>([]);
-  const mountedTerminalThreadRefs = useMemo(
-    () =>
-      mountedTerminalThreadKeys.flatMap((mountedThreadKey) => {
-        const mountedThreadRef = parseScopedThreadKey(mountedThreadKey);
-        return mountedThreadRef ? [{ key: mountedThreadKey, threadRef: mountedThreadRef }] : [];
-      }),
-    [mountedTerminalThreadKeys],
-  );
-
-  const fallbackDraftProjectRef = draftThread
-    ? scopeProjectRef(draftThread.environmentId, draftThread.projectId)
-    : null;
-  const fallbackDraftProject = useProject(fallbackDraftProjectRef);
+  const routeThreadActiveTerminalId = routeThreadActiveTerminalDockGroup?.activeTerminalId ?? "";
   const localDraftError = serverThread
     ? null
     : ((draftId ? localDraftErrorsByDraftId[draftId]?.message : null) ?? null);
@@ -1399,31 +834,13 @@ function ChatViewContent(props: ChatViewProps) {
       };
     });
   }, [draftId, localDraftErrorsByDraftId, routeThreadKey, serverThread]);
-  const localDraftThread = useMemo(
-    () =>
-      draftThread
-        ? buildLocalDraftThread(
-            threadId,
-            draftThread,
-            fallbackDraftProject?.defaultModelSelection ?? NO_PROVIDER_MODEL_SELECTION,
-          )
-        : undefined,
-    [draftThread, fallbackDraftProject?.defaultModelSelection, threadId],
-  );
-  // Promotion is data-driven: the draft route keeps rendering while the
-  // server thread (same pre-allocated ref) starts, so live state must not
-  // depend on which route is mounted.
-  const isServerThread = serverThread !== null;
-  const activeThread = isServerThread ? serverThread : localDraftThread;
   const threadError = isServerThread
     ? (localServerError ?? serverThread?.session?.lastError ?? null)
     : localDraftError;
   const runtimeMode = composerRuntimeMode ?? activeThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
   const interactionMode =
     composerInteractionMode ?? activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE;
-  const isLocalDraftThread = !isServerThread && localDraftThread !== undefined;
   const canCheckoutPullRequestIntoThread = isLocalDraftThread;
-  const activeThreadId = activeThread?.id ?? null;
   const runningTerminalIds = useThreadRunningTerminalIds({
     environmentId: activeThread?.environmentId ?? null,
     threadId: activeThreadId,
@@ -1445,24 +862,65 @@ function ChatViewContent(props: ChatViewProps) {
     [activeThreadKnownSessions],
   );
   const activeKnownTerminalIds = useMemo(
-    () => [...new Set([...activeServerOrderedTerminalIds, ...terminalUiState.terminalIds])],
-    [activeServerOrderedTerminalIds, terminalUiState.terminalIds],
+    () => [...new Set([...activeServerOrderedTerminalIds, ...routeThreadAllTerminalIds])],
+    [activeServerOrderedTerminalIds, routeThreadAllTerminalIds],
   );
-  const activeTerminalLabelsById = useMemo(() => {
-    const labels = new Map<string, string>();
-    for (const session of activeThreadKnownSessions) {
-      labels.set(
-        session.target.terminalId,
-        resolveTerminalSessionLabel(session.target.terminalId, session.state.summary),
-      );
-    }
-    return labels;
-  }, [activeThreadKnownSessions]);
-  const activeThreadRef = useMemo(
-    () => (activeThread ? scopeThreadRef(activeThread.environmentId, activeThread.id) : null),
-    [activeThread],
+  // Phase 1 of the VSCode-style center tab layout: mirror rightPanelStore's
+  // file/diff/plan/preview opens into centerTabsStore so the new CenterTabsHost
+  // is populated end to end, additive/parallel to the existing right-panel UI
+  // (see the design doc's phasing — thread tabs / router cutover are Phase 2+).
+  const centerTabsThreadTarget = useMemo<ThreadRouteTarget | null>(() => {
+    if (routeKind === "draft" && draftId) return { kind: "draft", draftId };
+    return activeThreadRef ? { kind: "server", threadRef: activeThreadRef } : null;
+  }, [routeKind, draftId, activeThreadRef]);
+  const openCenterFileTab = useCallback(
+    (relativePath: string, line?: number) => {
+      if (!centerTabsThreadTarget || !activeProjectRef) return;
+      useCenterTabsStore
+        .getState()
+        .openFileTab(activeProjectRef, centerTabsThreadTarget, relativePath, line);
+    },
+    [centerTabsThreadTarget, activeProjectRef],
   );
-  const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+  const openCenterDiffTab = useCallback(
+    (options?: { revealPath?: boolean }) => {
+      if (!centerTabsThreadTarget || !activeProjectRef) return;
+      useCenterTabsStore.getState().openDiffTab(activeProjectRef, centerTabsThreadTarget, options);
+    },
+    [centerTabsThreadTarget, activeProjectRef],
+  );
+  const openCenterPlanTab = useCallback(() => {
+    if (!centerTabsThreadTarget || !activeProjectRef) return;
+    useCenterTabsStore.getState().openPlanTab(activeProjectRef, centerTabsThreadTarget);
+  }, [centerTabsThreadTarget, activeProjectRef]);
+  // Right sidebar "Changes" list (list-only, per the VSCode-style tab layout
+  // design doc): reads the same parsed diff files `DiffPanel.tsx` already
+  // computed for the active thread (published to `diffPanelFileListStore` to
+  // avoid re-running the diff fetch/parse pipeline a second time here), and
+  // reveals the clicked row's path in the central diff tab.
+  const activeDiffFileListFiles = useDiffPanelFileListStore((state) =>
+    selectDiffPanelFileList(state.byThreadKey, activeThreadRef),
+  );
+  const activeDiffSelectedFilePath = useDiffPanelStore(
+    (state) => selectThreadDiffPanelSelection(state.byThreadKey, activeThreadRef).filePath,
+  );
+  const onSelectDiffFileListRow = useCallback(
+    (relativePath: string) => {
+      if (!activeThreadRef) return;
+      useDiffPanelStore.getState().revealFile(activeThreadRef, relativePath);
+      openCenterDiffTab({ revealPath: true });
+    },
+    [activeThreadRef, openCenterDiffTab],
+  );
+  const openCenterPreviewTab = useCallback(
+    (previewTabId?: string | null) => {
+      if (!centerTabsThreadTarget || !activeProjectRef) return;
+      useCenterTabsStore
+        .getState()
+        .openPreviewTab(activeProjectRef, centerTabsThreadTarget, previewTabId);
+    },
+    [centerTabsThreadTarget, activeProjectRef],
+  );
   const [timelineAnchor, setTimelineAnchor] = useState<{
     readonly threadKey: string | null;
     readonly messageId: MessageId | null;
@@ -1484,20 +942,19 @@ function ChatViewContent(props: ChatViewProps) {
   const activeFileSurface =
     activeRightPanelSurface?.kind === "file" ? activeRightPanelSurface : null;
   const activePreviewState = useThreadPreviewState(activeThreadRef);
-  const panelTerminalIds = useMemo(
-    () =>
-      new Set(
-        rightPanelState.surfaces.flatMap((surface) =>
-          surface.kind === "terminal" ? surface.terminalIds : [],
-        ),
-      ),
-    [rightPanelState.surfaces],
-  );
   const previewPanelOpen = activeRightPanelKind === "preview" && isPreviewSupportedInRuntime();
   const rightPanelOpen = rightPanelState.isOpen;
   const canMaximizeRightPanel = rightPanelOpen && !shouldUsePlanSidebarSheet;
-  const rightPanelMaximized =
-    canMaximizeRightPanel && maximizedRightPanelThreadKey === routeThreadKey;
+  // Shared per-thread state (`rightPanelStore`'s `maximized` field) rather
+  // than component-local state: the singleton `RightSidebar` this `ChatView`
+  // instance no longer renders (see `embedded` below) is sized by the SAME
+  // store-backed value via `useAssembledRightSidebarProps`, so both stay in
+  // sync. Only the chat-column-collapse width logic below still needs this
+  // value here.
+  const threadMaximized = useRightPanelStore(
+    (state) => selectThreadRightPanelState(state.byThreadKey, activeThreadRef).maximized,
+  );
+  const rightPanelMaximized = canMaximizeRightPanel && threadMaximized;
   const inlineRightPanelOwnsTitleBar = rightPanelOpen && !shouldUsePlanSidebarSheet;
 
   useEffect(() => {
@@ -1509,10 +966,6 @@ function ChatViewContent(props: ChatViewProps) {
 
   const planSidebarOpen = activeRightPanelKind === "plan";
 
-  const existingOpenTerminalThreadKeys = useMemo(() => {
-    const existingThreadKeys = new Set<string>([...serverThreadKeys, ...draftThreadKeys]);
-    return openTerminalThreadKeys.filter((nextThreadKey) => existingThreadKeys.has(nextThreadKey));
-  }, [draftThreadKeys, openTerminalThreadKeys, serverThreadKeys]);
   const activeLatestTurn = activeThread?.latestTurn ?? null;
   const sourcePlanThreadRef = useMemo(() => {
     const sourceThreadId = activeLatestTurn?.sourceProposedPlan?.threadId;
@@ -1537,26 +990,7 @@ function ChatViewContent(props: ChatViewProps) {
     }
     return entries;
   }, [activeThread, sourcePlanThreadRef, sourceThreadProposedPlans]);
-  useEffect(() => {
-    setMountedTerminalThreadKeys((currentThreadIds) => {
-      const nextThreadIds = reconcileMountedTerminalThreadIds({
-        currentThreadIds,
-        openThreadIds: existingOpenTerminalThreadKeys,
-        activeThreadId: activeThreadKey,
-        activeThreadTerminalOpen: Boolean(activeThreadKey && terminalUiState.terminalOpen),
-        maxHiddenThreadCount: MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
-      });
-      return currentThreadIds.length === nextThreadIds.length &&
-        currentThreadIds.every((nextThreadId, index) => nextThreadId === nextThreadIds[index])
-        ? currentThreadIds
-        : nextThreadIds;
-    });
-  }, [activeThreadKey, existingOpenTerminalThreadKeys, terminalUiState.terminalOpen]);
   const latestTurnSettled = isLatestTurnSettled(activeLatestTurn, activeThread?.session ?? null);
-  const activeProjectRef = activeThread
-    ? scopeProjectRef(activeThread.environmentId, activeThread.projectId)
-    : null;
-  const activeProject = useProject(activeProjectRef);
   const activeEnvironmentShell = useEnvironmentQuery(
     activeThread ? environmentShell.stateAtom(activeThread.environmentId) : null,
   );
@@ -1564,30 +998,6 @@ function ChatViewContent(props: ChatViewProps) {
   const activeProjectKey = activeProject
     ? `${activeProject.environmentId}:${activeProject.workspaceRoot}`
     : null;
-  const [pendingFileSurfaceIdsByProject, setPendingFileSurfaceIdsByProject] = useState<
-    ReadonlyMap<string, ReadonlySet<string>>
-  >(() => new Map());
-  const pendingFileSurfaceIds = activeProjectKey
-    ? (pendingFileSurfaceIdsByProject.get(activeProjectKey) ?? EMPTY_PENDING_FILE_SURFACE_IDS)
-    : EMPTY_PENDING_FILE_SURFACE_IDS;
-  const handleFilePendingChange = useCallback(
-    (relativePath: string, pending: boolean) => {
-      if (!activeProjectKey) return;
-      setPendingFileSurfaceIdsByProject((currentByProject) => {
-        const current = currentByProject.get(activeProjectKey) ?? EMPTY_PENDING_FILE_SURFACE_IDS;
-        const surfaceId = `file:${relativePath}`;
-        if (current.has(surfaceId) === pending) return currentByProject;
-        const next = new Set(current);
-        if (pending) next.add(surfaceId);
-        else next.delete(surfaceId);
-        const nextByProject = new Map(currentByProject);
-        if (next.size === 0) nextByProject.delete(activeProjectKey);
-        else nextByProject.set(activeProjectKey, next);
-        return nextByProject;
-      });
-    },
-    [activeProjectKey],
-  );
   const configuredPreviewUrls = useMemo(
     () => getConfiguredPreviewUrls(activeProject?.scripts),
     [activeProject?.scripts],
@@ -2315,23 +1725,6 @@ function ChatViewContent(props: ChatViewProps) {
     return byUserMessageId;
   }, [inferredCheckpointTurnCountByTurnId, timelineEntries, turnDiffSummaryByAssistantMessageId]);
 
-  const gitCwd = activeProject
-    ? projectScriptCwd({
-        project: { cwd: activeProject.workspaceRoot },
-        worktreePath: activeThread?.worktreePath ?? null,
-      })
-    : null;
-  const gitStatusCwd = activeThread?.worktreePath ?? gitCwd;
-  const gitStatusQuery = useEnvironmentQuery(
-    gitStatusCwd === null
-      ? null
-      : vcsEnvironment.status({
-          environmentId,
-          input: { cwd: gitStatusCwd },
-        }),
-  );
-  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
   // Prefer an instance-id match so a custom Codex instance (e.g.
   // `codex_personal`) surfaces its own status/message in the banner rather
   // than the default Codex's. Falls back to first-match-by-kind when no
@@ -2370,43 +1763,10 @@ function ChatViewContent(props: ChatViewProps) {
     ? activeProviderStatus
     : null;
   const hasTimelineTopBanner = Boolean(threadError) || visibleProviderStatus !== null;
-  const activeProjectCwd = activeProject?.workspaceRoot ?? null;
-  const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
-  const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
-  const activeTerminalLaunchContext =
-    terminalUiLaunchContext?.threadId === activeThreadId ? terminalUiLaunchContext : null;
-  // Default true while loading to avoid toolbar flicker.
-  const isGitRepo = gitStatusQuery.data?.isRepo ?? true;
   const showComposerContextStrip = isGitRepo && activeProject !== null;
   const initialDiffPanelGitScope =
     gitStatusQuery.data?.hasWorkingTreeChanges === true ? "unstaged" : "branch";
   const diffPanelGitStatusResolutionKey = gitStatusQuery.data ? "resolved" : "pending";
-  const terminalShortcutLabelOptions = useMemo(
-    () => ({
-      context: {
-        terminalFocus: true,
-        terminalOpen: Boolean(terminalUiState.terminalOpen),
-      },
-    }),
-    [terminalUiState.terminalOpen],
-  );
-  const splitTerminalShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "terminal.split", terminalShortcutLabelOptions),
-    [keybindings, terminalShortcutLabelOptions],
-  );
-  const splitTerminalVerticalShortcutLabel = useMemo(
-    () =>
-      shortcutLabelForCommand(keybindings, "terminal.splitVertical", terminalShortcutLabelOptions),
-    [keybindings, terminalShortcutLabelOptions],
-  );
-  const newTerminalShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "terminal.new", terminalShortcutLabelOptions),
-    [keybindings, terminalShortcutLabelOptions],
-  );
-  const closeTerminalShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "terminal.close", terminalShortcutLabelOptions),
-    [keybindings, terminalShortcutLabelOptions],
-  );
   const onToggleDiff = useCallback(() => {
     if (!isServerThread) {
       return;
@@ -2416,8 +1776,9 @@ function ChatViewContent(props: ChatViewProps) {
     }
     if (activeThreadRef) {
       useRightPanelStore.getState().toggle(activeThreadRef, "diff");
+      if (!diffOpen) openCenterDiffTab();
     }
-  }, [activeThreadRef, diffOpen, isServerThread, onDiffPanelOpen]);
+  }, [activeThreadRef, diffOpen, isServerThread, onDiffPanelOpen, openCenterDiffTab]);
 
   const envLocked = Boolean(
     activeThread &&
@@ -2442,16 +1803,9 @@ function ChatViewContent(props: ChatViewProps) {
     [draftId, envLocked, logicalProjectEnvironments, setDraftThreadContext],
   );
 
-  const activeTerminalGroup =
-    terminalUiState.terminalGroups.find(
-      (group) => group.id === terminalUiState.activeTerminalGroupId,
-    ) ??
-    terminalUiState.terminalGroups.find((group) =>
-      group.terminalIds.includes(terminalUiState.activeTerminalId),
-    ) ??
-    null;
+  const activeTerminalGroup = routeThreadActiveTerminalDockGroup;
   const hasReachedSplitLimit =
-    (activeTerminalGroup?.terminalIds.length ?? 0) >= MAX_TERMINALS_PER_GROUP;
+    (activeTerminalGroup?.terminalIds.length ?? 0) >= TERMINAL_DOCK_MAX_PANES_PER_GROUP;
   const setThreadError = useCallback(
     (targetThreadId: ThreadId | null, error: string | null) => {
       if (!targetThreadId) return;
@@ -2505,133 +1859,70 @@ function ChatViewContent(props: ChatViewProps) {
   const setTerminalOpen = useCallback(
     (open: boolean) => {
       if (!activeThreadRef) return;
-      storeSetTerminalOpen(activeThreadRef, open);
+      if (open) {
+        useRightPanelStore.getState().show(activeThreadRef);
+        if (
+          !selectThreadHasTerminalGroups(
+            useTerminalDockStore.getState().byThreadKey,
+            activeThreadRef,
+          )
+        ) {
+          useTerminalDockStore.getState().createGroup(activeThreadRef);
+        }
+      } else {
+        useRightPanelStore.getState().close(activeThreadRef);
+      }
     },
-    [activeThreadRef, storeSetTerminalOpen],
+    [activeThreadRef],
   );
+  // There is exactly one terminal UI now (the right sidebar's bottom dock,
+  // backed by `terminalDockStore`) -- "toggling the terminal" means showing
+  // or hiding the right panel and, the first time, creating a terminal dock
+  // group for this thread so the dock has something to render.
   const toggleTerminalVisibility = useCallback(() => {
     if (!activeThreadRef) return;
-    const nextOpen = !terminalUiState.terminalOpen;
-    if (nextOpen && terminalUiState.terminalIds.length === 0) {
-      if (!activeThreadId || !activeProject) {
-        return;
-      }
-      const cwdForOpen = gitCwd ?? activeProject.workspaceRoot;
-      if (!cwdForOpen) {
-        return;
-      }
-      const terminalId = nextTerminalId([...activeKnownTerminalIds, ...panelTerminalIds]);
-      storeEnsureTerminal(activeThreadRef, terminalId, { open: true });
-      void openTerminal({
-        environmentId,
-        input: {
-          threadId: activeThreadId,
-          terminalId,
-          cwd: cwdForOpen,
-          ...(activeThreadWorktreePath != null ? { worktreePath: activeThreadWorktreePath } : {}),
-          env: projectScriptRuntimeEnv({
-            project: { cwd: activeProject.workspaceRoot },
-            worktreePath: activeThreadWorktreePath,
-          }),
-        },
-      });
+    if (rightPanelOpen && routeThreadTerminalOpen) {
+      useRightPanelStore.getState().close(activeThreadRef);
       return;
     }
-    setTerminalOpen(nextOpen);
-  }, [
-    activeKnownTerminalIds,
-    activeProject,
-    activeThreadId,
-    activeThreadRef,
-    activeThreadWorktreePath,
-    environmentId,
-    gitCwd,
-    openTerminal,
-    panelTerminalIds,
-    setTerminalOpen,
-    storeEnsureTerminal,
-    terminalUiState.terminalIds.length,
-    terminalUiState.terminalOpen,
-  ]);
+    setTerminalOpen(true);
+  }, [activeThreadRef, rightPanelOpen, routeThreadTerminalOpen, setTerminalOpen]);
   const splitTerminal = useCallback(
     (direction: "horizontal" | "vertical" = "horizontal") => {
       if (!activeThreadRef || hasReachedSplitLimit || !activeThreadId || !activeProject) {
         return;
       }
-      const cwdForOpen = gitCwd ?? activeProject.workspaceRoot;
-      if (!cwdForOpen) {
+      const groupId = routeThreadActiveTerminalDockGroup?.id;
+      if (!groupId) {
+        useTerminalDockStore
+          .getState()
+          .createGroup(activeThreadRef, nextTerminalId(activeKnownTerminalIds));
+        bumpTerminalFocusRequestId();
         return;
       }
       const terminalId = nextTerminalId(activeKnownTerminalIds);
-      if (direction === "vertical") {
-        storeSplitTerminalVertical(activeThreadRef, terminalId);
-      } else {
-        storeSplitTerminal(activeThreadRef, terminalId);
-      }
-      setTerminalFocusRequestId((value) => value + 1);
-      void openTerminal({
-        environmentId,
-        input: {
-          threadId: activeThreadId,
-          terminalId,
-          cwd: cwdForOpen,
-          ...(activeThreadWorktreePath != null ? { worktreePath: activeThreadWorktreePath } : {}),
-          env: projectScriptRuntimeEnv({
-            project: { cwd: activeProject.workspaceRoot },
-            worktreePath: activeThreadWorktreePath,
-          }),
-        },
-      });
+      useTerminalDockStore
+        .getState()
+        .splitTerminal(activeThreadRef, groupId, terminalId, direction);
+      bumpTerminalFocusRequestId();
     },
     [
       activeProject,
       activeKnownTerminalIds,
       activeThreadId,
       activeThreadRef,
-      openTerminal,
-      activeThreadWorktreePath,
-      environmentId,
-      gitCwd,
       hasReachedSplitLimit,
-      storeSplitTerminal,
-      storeSplitTerminalVertical,
+      routeThreadActiveTerminalDockGroup,
     ],
   );
   const createNewTerminal = useCallback(() => {
     if (!activeThreadRef || !activeThreadId || !activeProject) {
       return;
     }
-    const cwdForOpen = gitCwd ?? activeProject.workspaceRoot;
-    if (!cwdForOpen) {
-      return;
-    }
     const terminalId = nextTerminalId(activeKnownTerminalIds);
-    storeNewTerminal(activeThreadRef, terminalId);
-    setTerminalFocusRequestId((value) => value + 1);
-    void openTerminal({
-      environmentId,
-      input: {
-        threadId: activeThreadId,
-        terminalId,
-        cwd: cwdForOpen,
-        ...(activeThreadWorktreePath != null ? { worktreePath: activeThreadWorktreePath } : {}),
-        env: projectScriptRuntimeEnv({
-          project: { cwd: activeProject.workspaceRoot },
-          worktreePath: activeThreadWorktreePath,
-        }),
-      },
-    });
-  }, [
-    activeProject,
-    activeKnownTerminalIds,
-    activeThreadId,
-    activeThreadRef,
-    openTerminal,
-    activeThreadWorktreePath,
-    environmentId,
-    gitCwd,
-    storeNewTerminal,
-  ]);
+    useTerminalDockStore.getState().createGroup(activeThreadRef, terminalId);
+    bumpTerminalFocusRequestId();
+  }, [activeKnownTerminalIds, activeProject, activeThreadId, activeThreadRef]);
   const closeTerminal = useCallback(
     (terminalId: string) => {
       if (!activeThreadId || !activeThreadRef) return;
@@ -2653,17 +1944,19 @@ function ChatViewContent(props: ChatViewProps) {
           await fallbackExitWrite();
         }
       })();
-      storeCloseTerminal(activeThreadRef, terminalId);
-      setTerminalFocusRequestId((value) => value + 1);
+      const dockState = selectThreadTerminalDockState(
+        useTerminalDockStore.getState().byThreadKey,
+        activeThreadRef,
+      );
+      const groupId = dockState.groupIds.find((id) =>
+        dockState.groups[id]?.terminalIds.includes(terminalId),
+      );
+      if (groupId) {
+        useTerminalDockStore.getState().closeTerminalPane(activeThreadRef, groupId, terminalId);
+      }
+      bumpTerminalFocusRequestId();
     },
-    [
-      activeThreadId,
-      activeThreadRef,
-      closeTerminalMutation,
-      environmentId,
-      storeCloseTerminal,
-      writeTerminal,
-    ],
+    [activeThreadId, activeThreadRef, closeTerminalMutation, environmentId, writeTerminal],
   );
   const runProjectScript = useCallback(
     async (
@@ -2685,22 +1978,17 @@ function ChatViewContent(props: ChatViewProps) {
       }
       const targetCwd = options?.cwd ?? gitCwd ?? activeProject.workspaceRoot;
       const baseTerminalId =
-        terminalUiState.activeTerminalId || activeKnownTerminalIds[0] || DEFAULT_THREAD_TERMINAL_ID;
+        routeThreadActiveTerminalId || activeKnownTerminalIds[0] || DEFAULT_THREAD_TERMINAL_ID;
       const isBaseTerminalBusy = runningTerminalIds.includes(baseTerminalId);
       const wantsNewTerminal = Boolean(options?.preferNewTerminal) || isBaseTerminalBusy;
       const shouldCreateNewTerminal = wantsNewTerminal;
       const targetWorktreePath = options?.worktreePath ?? activeThread.worktreePath ?? null;
 
-      setTerminalUiLaunchContext({
-        threadId: activeThreadId,
-        cwd: targetCwd,
-        worktreePath: targetWorktreePath,
-      });
       setTerminalOpen(true);
       if (!activeThreadRef) {
         return;
       }
-      setTerminalFocusRequestId((value) => value + 1);
+      bumpTerminalFocusRequestId();
 
       const runtimeEnv = projectScriptRuntimeEnv({
         project: {
@@ -2731,9 +2019,22 @@ function ChatViewContent(props: ChatViewProps) {
           };
 
       if (shouldCreateNewTerminal) {
-        storeNewTerminal(activeThreadRef, targetTerminalId);
+        useTerminalDockStore.getState().createGroup(activeThreadRef, targetTerminalId);
       } else {
-        storeSetActiveTerminal(activeThreadRef, targetTerminalId);
+        const dockState = selectThreadTerminalDockState(
+          useTerminalDockStore.getState().byThreadKey,
+          activeThreadRef,
+        );
+        const groupId = dockState.groupIds.find((id) =>
+          dockState.groups[id]?.terminalIds.includes(targetTerminalId),
+        );
+        if (groupId) {
+          useTerminalDockStore
+            .getState()
+            .activateTerminalPane(activeThreadRef, groupId, targetTerminalId);
+        } else {
+          useTerminalDockStore.getState().createGroup(activeThreadRef, targetTerminalId);
+        }
       }
 
       const openResult = await openTerminal({ environmentId, input: openTerminalInput });
@@ -2772,14 +2073,12 @@ function ChatViewContent(props: ChatViewProps) {
       gitCwd,
       setTerminalOpen,
       setThreadError,
-      storeNewTerminal,
-      storeSetActiveTerminal,
       setLastInvokedScriptByProjectId,
       environmentId,
       openTerminal,
       activeKnownTerminalIds,
       runningTerminalIds,
-      terminalUiState.activeTerminalId,
+      routeThreadActiveTerminalId,
       writeTerminal,
     ],
   );
@@ -2977,23 +2276,30 @@ function ChatViewContent(props: ChatViewProps) {
       planSidebarDismissedForTurnRef.current = null;
     }
     useRightPanelStore.getState().toggle(activeThreadRef, "plan");
-  }, [activeThreadRef, dismissPlanSidebarForCurrentTurn, planSidebarOpen]);
+    if (!planSidebarOpen) openCenterPlanTab();
+  }, [activeThreadRef, dismissPlanSidebarForCurrentTurn, planSidebarOpen, openCenterPlanTab]);
   const closePlanSidebar = useCallback(() => {
     if (!activeThreadRef) return;
-    setMaximizedRightPanelThreadKey(null);
+    // `close` un-maximizes the panel too (see `rightPanelStore.ts`), so no
+    // separate maximize-reset call is needed here.
     useRightPanelStore.getState().close(activeThreadRef);
     dismissPlanSidebarForCurrentTurn();
   }, [activeThreadRef, dismissPlanSidebarForCurrentTurn]);
   const createBrowserSurface = useCallback(() => {
     if (!activeThreadRef) return;
-    void addBrowserSurface({ threadRef: activeThreadRef, openPreview });
-  }, [activeThreadRef, openPreview]);
+    void addBrowserSurface({
+      threadRef: activeThreadRef,
+      openPreview,
+      onOpened: (snapshot) => openCenterPreviewTab(snapshot.tabId),
+    });
+  }, [activeThreadRef, openCenterPreviewTab, openPreview]);
   const addDiffSurface = useCallback(() => {
     if (!activeThreadRef || !isServerThread || !isGitRepo) return;
     if (planSidebarOpen) {
       dismissPlanSidebarForCurrentTurn();
     }
     useRightPanelStore.getState().open(activeThreadRef, "diff");
+    openCenterDiffTab();
     onDiffPanelOpen?.();
   }, [
     activeThreadRef,
@@ -3001,6 +2307,7 @@ function ChatViewContent(props: ChatViewProps) {
     isGitRepo,
     isServerThread,
     onDiffPanelOpen,
+    openCenterDiffTab,
     planSidebarOpen,
   ]);
   const addFilesSurface = useCallback(() => {
@@ -3011,8 +2318,9 @@ function ChatViewContent(props: ChatViewProps) {
     (relativePath: string) => {
       if (!activeThreadRef || !activeProject) return;
       useRightPanelStore.getState().openFile(activeThreadRef, relativePath);
+      openCenterFileTab(relativePath);
     },
-    [activeProject, activeThreadRef],
+    [activeProject, activeThreadRef, openCenterFileTab],
   );
   const togglePreviewPanel = useCallback(() => {
     if (!activeThreadRef || !isPreviewSupportedInRuntime()) return;
@@ -3023,116 +2331,22 @@ function ChatViewContent(props: ChatViewProps) {
     const activeTabId = activePreviewState.activeTabId;
     if (activeTabId) {
       useRightPanelStore.getState().openBrowser(activeThreadRef, activeTabId);
+      openCenterPreviewTab(activeTabId);
     } else {
       createBrowserSurface();
     }
-  }, [activePreviewState.activeTabId, activeThreadRef, createBrowserSurface, previewPanelOpen]);
+  }, [
+    activePreviewState.activeTabId,
+    activeThreadRef,
+    createBrowserSurface,
+    openCenterPreviewTab,
+    previewPanelOpen,
+  ]);
   const closePreviewPanel = useCallback(() => {
     if (activeThreadRef) {
-      setMaximizedRightPanelThreadKey(null);
       useRightPanelStore.getState().close(activeThreadRef);
     }
   }, [activeThreadRef]);
-  const addTerminalSurface = useCallback(() => {
-    if (!activeThreadRef || !activeThreadId || !activeProject) return;
-    const cwd = gitCwd ?? activeProject.workspaceRoot;
-    const terminalId = nextTerminalId([...activeKnownTerminalIds, ...panelTerminalIds]);
-    useRightPanelStore.getState().openTerminal(activeThreadRef, terminalId);
-    setTerminalFocusRequestId((value) => value + 1);
-    void openTerminal({
-      environmentId: activeThreadRef.environmentId,
-      input: {
-        threadId: activeThreadId,
-        terminalId,
-        cwd,
-        ...(activeThreadWorktreePath != null ? { worktreePath: activeThreadWorktreePath } : {}),
-        env: projectScriptRuntimeEnv({
-          project: { cwd: activeProject.workspaceRoot },
-          worktreePath: activeThreadWorktreePath,
-        }),
-      },
-    });
-  }, [
-    activeKnownTerminalIds,
-    activeProject,
-    activeThreadId,
-    activeThreadRef,
-    activeThreadWorktreePath,
-    gitCwd,
-    openTerminal,
-    panelTerminalIds,
-  ]);
-  const splitPanelTerminal = useCallback(
-    (direction: "horizontal" | "vertical" = "horizontal") => {
-      if (
-        !activeThreadRef ||
-        !activeThreadId ||
-        !activeProject ||
-        activeRightPanelSurface?.kind !== "terminal" ||
-        activeRightPanelSurface.terminalIds.length >= MAX_TERMINALS_PER_GROUP
-      ) {
-        return;
-      }
-      const terminalId = nextTerminalId([...activeKnownTerminalIds, ...panelTerminalIds]);
-      const cwd = gitCwd ?? activeProject.workspaceRoot;
-      useRightPanelStore
-        .getState()
-        .splitTerminal(activeThreadRef, activeRightPanelSurface.id, terminalId, direction);
-      setTerminalFocusRequestId((value) => value + 1);
-      void openTerminal({
-        environmentId: activeThreadRef.environmentId,
-        input: {
-          threadId: activeThreadId,
-          terminalId,
-          cwd,
-          ...(activeThreadWorktreePath != null ? { worktreePath: activeThreadWorktreePath } : {}),
-          env: projectScriptRuntimeEnv({
-            project: { cwd: activeProject.workspaceRoot },
-            worktreePath: activeThreadWorktreePath,
-          }),
-        },
-      });
-    },
-    [
-      activeKnownTerminalIds,
-      activeProject,
-      activeRightPanelSurface,
-      activeThreadId,
-      activeThreadRef,
-      activeThreadWorktreePath,
-      gitCwd,
-      openTerminal,
-      panelTerminalIds,
-    ],
-  );
-  const splitPanelTerminalVertical = useCallback(() => {
-    splitPanelTerminal("vertical");
-  }, [splitPanelTerminal]);
-  const activatePanelTerminal = useCallback(
-    (terminalId: string) => {
-      if (!activeThreadRef || activeRightPanelSurface?.kind !== "terminal") return;
-      useRightPanelStore
-        .getState()
-        .activateTerminal(activeThreadRef, activeRightPanelSurface.id, terminalId);
-      setTerminalFocusRequestId((value) => value + 1);
-    },
-    [activeRightPanelSurface, activeThreadRef],
-  );
-  const closePanelTerminal = useCallback(
-    (terminalId: string) => {
-      if (!activeThreadRef || activeRightPanelSurface?.kind !== "terminal") return;
-      void closeTerminalMutation({
-        environmentId: activeThreadRef.environmentId,
-        input: { threadId: activeThreadRef.threadId, terminalId, deleteHistory: true },
-      });
-      storeCloseTerminal(activeThreadRef, terminalId);
-      useRightPanelStore
-        .getState()
-        .closeTerminal(activeThreadRef, activeRightPanelSurface.id, terminalId);
-      setTerminalFocusRequestId((value) => value + 1);
-    },
-    [activeRightPanelSurface, activeThreadRef, closeTerminalMutation, storeCloseTerminal],
-  );
   const activateRightPanelSurface = useCallback(
     (surface: RightPanelSurface) => {
       if (!activeThreadRef) return;
@@ -3144,9 +2358,6 @@ function ChatViewContent(props: ChatViewProps) {
       useRightPanelStore.getState().activateSurface(activeThreadRef, surface.id);
       if (surface.kind === "preview" && surface.resourceId) {
         setActivePreviewTab(activeThreadRef, surface.resourceId);
-      }
-      if (surface.kind === "terminal") {
-        setTerminalFocusRequestId((value) => value + 1);
       }
       if (surface.kind === "diff" && !diffOpen) {
         onDiffPanelOpen?.();
@@ -3166,12 +2377,34 @@ function ChatViewContent(props: ChatViewProps) {
     }
     useRightPanelStore.getState().toggleVisibility(activeThreadRef);
   }, [activeThreadRef, closePlanSidebar, closePreviewPanel, planSidebarOpen, rightPanelOpen]);
-  const toggleRightPanelMaximized = useCallback(() => {
-    if (!canMaximizeRightPanel) return;
-    setMaximizedRightPanelThreadKey((threadKey) =>
-      threadKey === routeThreadKey ? null : routeThreadKey,
-    );
-  }, [canMaximizeRightPanel, routeThreadKey]);
+
+  // Hoisted per-thread controller (see `useRightSidebarController.tsx`) for
+  // the state the right sidebar needs, independent of which/how many
+  // `ChatView` instances are mounted. Called unconditionally (well before
+  // the "no active thread" early return further down) so hook order stays
+  // stable, and early enough that its outputs (e.g. `closeExpandedImage`)
+  // are already initialized wherever else in this component they're read.
+  const {
+    expandedImage,
+    expandTimelineImage: onExpandTimelineImage,
+    closeExpandedImage,
+    terminalFocusRequestId,
+    bumpTerminalFocusRequestId,
+    pendingFileSurfaceIds,
+    handleFilePendingChange,
+    panelToggleControls,
+  } = useRightSidebarController({
+    threadRef: activeThreadRef,
+    ...(routeKind === "draft" && draftId ? { draftId } : {}),
+    activeProjectKey,
+    panelToggle: {
+      rightPanelAvailable: activeProject !== null,
+      rightPanelOpen,
+      rightPanelShortcutLabel: shortcutLabelForCommand(keybindings, "rightPanel.toggle"),
+      onToggleRightPanel: toggleRightPanel,
+    },
+  });
+
   const cleanupRightPanelSurfaces = useCallback(
     (surfaces: readonly RightPanelSurface[]) => {
       if (!activeThreadRef) return;
@@ -3188,25 +2421,9 @@ function ChatViewContent(props: ChatViewProps) {
             threadRef: activeThreadRef,
           });
         }
-        if (surface.kind === "terminal") {
-          for (const terminalId of surface.terminalIds) {
-            storeCloseTerminal(activeThreadRef, terminalId);
-            void closeTerminalMutation({
-              environmentId: activeThreadRef.environmentId,
-              input: { threadId: activeThreadRef.threadId, terminalId, deleteHistory: true },
-            });
-          }
-        }
       }
     },
-    [
-      activeThreadRef,
-      activePreviewState.sessions,
-      closePreview,
-      closeTerminalMutation,
-      dismissPlanSidebarForCurrentTurn,
-      storeCloseTerminal,
-    ],
+    [activeThreadRef, activePreviewState.sessions, closePreview, dismissPlanSidebarForCurrentTurn],
   );
   const syncActivePreviewSurface = useCallback(() => {
     if (!activeThreadRef) return;
@@ -3707,6 +2924,7 @@ function ChatViewContent(props: ChatViewProps) {
       planSidebarOpenOnNextThreadRef.current = false;
       if (activeThreadRef) {
         useRightPanelStore.getState().open(activeThreadRef, "plan");
+        openCenterPlanTab();
       }
     }
     planSidebarDismissedForTurnRef.current = null;
@@ -3725,12 +2943,14 @@ function ChatViewContent(props: ChatViewProps) {
     if (planSidebarDismissedForTurnRef.current === turnKey) return;
     if (activeThreadRef) {
       useRightPanelStore.getState().open(activeThreadRef, "plan");
+      openCenterPlanTab();
     }
   }, [
     activePlan,
     activeLatestTurn?.turnId,
     activeThreadRef,
     autoOpenPlanSidebar,
+    openCenterPlanTab,
     planSidebarOpen,
     sidebarProposedPlan?.turnId,
   ]);
@@ -3740,14 +2960,14 @@ function ChatViewContent(props: ChatViewProps) {
   }, [activeThread?.id]);
 
   useEffect(() => {
-    if (!activeThread?.id || terminalUiState.terminalOpen) return;
+    if (!activeThread?.id || routeThreadTerminalOpen) return;
     const frame = window.requestAnimationFrame(() => {
       focusComposer();
     });
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [activeThread?.id, focusComposer, terminalUiState.terminalOpen]);
+  }, [activeThread?.id, focusComposer, routeThreadTerminalOpen]);
 
   useEffect(() => {
     if (!activeThread?.id) return;
@@ -3785,12 +3005,8 @@ function ChatViewContent(props: ChatViewProps) {
       return [];
     });
     resetLocalDispatch();
-    setExpandedImage(null);
-  }, [draftId, resetLocalDispatch, threadId]);
-
-  const closeExpandedImage = useCallback(() => {
-    setExpandedImage(null);
-  }, []);
+    closeExpandedImage();
+  }, [closeExpandedImage, draftId, resetLocalDispatch, threadId]);
 
   const activeWorktreePath = activeThread?.worktreePath ?? null;
   const derivedEnvMode: DraftThreadEnvMode = resolveEffectiveEnvMode({
@@ -4166,56 +3382,13 @@ function ChatViewContent(props: ChatViewProps) {
   }, [canOverrideServerThreadEnvMode]);
 
   useEffect(() => {
-    if (!activeThreadId) {
-      setTerminalUiLaunchContext(null);
-      return;
-    }
-    setTerminalUiLaunchContext((current) => {
-      if (!current) return current;
-      if (current.threadId === activeThreadId) return current;
-      return null;
-    });
-  }, [activeThreadId]);
-
-  useEffect(() => {
-    if (!activeThreadId || !activeProjectCwd) {
-      return;
-    }
-    setTerminalUiLaunchContext((current) => {
-      if (!current || current.threadId !== activeThreadId) {
-        return current;
-      }
-      const settledCwd = projectScriptCwd({
-        project: { cwd: activeProjectCwd },
-        worktreePath: activeThreadWorktreePath,
-      });
-      if (
-        settledCwd === current.cwd &&
-        (activeThreadWorktreePath ?? null) === current.worktreePath
-      ) {
-        return null;
-      }
-      return current;
-    });
-  }, [activeProjectCwd, activeThreadId, activeThreadWorktreePath]);
-
-  useEffect(() => {
-    if (terminalUiState.terminalOpen) {
-      return;
-    }
-    setTerminalUiLaunchContext((current) =>
-      current?.threadId === activeThreadId ? null : current,
-    );
-  }, [activeThreadId, terminalUiState.terminalOpen]);
-
-  useEffect(() => {
     if (!activeThreadKey) return;
     const previous = terminalUiOpenByThreadRef.current[activeThreadKey] ?? false;
-    const current = Boolean(terminalUiState.terminalOpen);
+    const current = Boolean(routeThreadTerminalOpen);
 
     if (!previous && current) {
       terminalUiOpenByThreadRef.current[activeThreadKey] = current;
-      setTerminalFocusRequestId((value) => value + 1);
+      bumpTerminalFocusRequestId();
       return;
     } else if (previous && !current) {
       terminalUiOpenByThreadRef.current[activeThreadKey] = current;
@@ -4228,7 +3401,7 @@ function ChatViewContent(props: ChatViewProps) {
     }
 
     terminalUiOpenByThreadRef.current[activeThreadKey] = current;
-  }, [activeThreadKey, focusComposer, terminalUiState.terminalOpen]);
+  }, [activeThreadKey, focusComposer, routeThreadTerminalOpen]);
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
@@ -4241,7 +3414,7 @@ function ChatViewContent(props: ChatViewProps) {
       }
       const shortcutContext = {
         terminalFocus: terminalFocusOwner !== null,
-        terminalOpen: Boolean(terminalUiState.terminalOpen),
+        terminalOpen: Boolean(routeThreadTerminalOpen),
         modelPickerOpen: composerRef.current?.isModelPickerOpen() ?? false,
       };
 
@@ -4279,11 +3452,7 @@ function ChatViewContent(props: ChatViewProps) {
       if (command === "terminal.split") {
         event.preventDefault();
         event.stopPropagation();
-        if (terminalFocusOwner === "right-panel") {
-          splitPanelTerminal();
-          return;
-        }
-        if (!terminalUiState.terminalOpen) {
+        if (!routeThreadTerminalOpen) {
           setTerminalOpen(true);
         }
         splitTerminal();
@@ -4293,11 +3462,7 @@ function ChatViewContent(props: ChatViewProps) {
       if (command === "terminal.splitVertical") {
         event.preventDefault();
         event.stopPropagation();
-        if (terminalFocusOwner === "right-panel") {
-          splitPanelTerminal("vertical");
-          return;
-        }
-        if (!terminalUiState.terminalOpen) {
+        if (!routeThreadTerminalOpen) {
           setTerminalOpen(true);
         }
         splitTerminal("vertical");
@@ -4307,23 +3472,15 @@ function ChatViewContent(props: ChatViewProps) {
       if (command === "terminal.close") {
         event.preventDefault();
         event.stopPropagation();
-        if (terminalFocusOwner === "right-panel" && activeRightPanelSurface?.kind === "terminal") {
-          closePanelTerminal(activeRightPanelSurface.activeTerminalId);
-          return;
-        }
-        if (!terminalUiState.terminalOpen) return;
-        closeTerminal(terminalUiState.activeTerminalId);
+        if (!routeThreadTerminalOpen) return;
+        closeTerminal(routeThreadActiveTerminalId);
         return;
       }
 
       if (command === "terminal.new") {
         event.preventDefault();
         event.stopPropagation();
-        if (terminalFocusOwner === "right-panel") {
-          addTerminalSurface();
-          return;
-        }
-        if (!terminalUiState.terminalOpen) {
+        if (!routeThreadTerminalOpen) {
           setTerminalOpen(true);
         }
         createNewTerminal();
@@ -4357,17 +3514,14 @@ function ChatViewContent(props: ChatViewProps) {
   }, [
     activeProject,
     activeRightPanelSurface,
-    addTerminalSurface,
-    terminalUiState.terminalOpen,
-    terminalUiState.activeTerminalId,
+    routeThreadTerminalOpen,
+    routeThreadActiveTerminalId,
     activeThreadId,
     closeTerminal,
-    closePanelTerminal,
     createNewTerminal,
     setTerminalOpen,
     runProjectScript,
     splitTerminal,
-    splitPanelTerminal,
     keybindings,
     onToggleDiff,
     toggleRightPanel,
@@ -5137,6 +4291,7 @@ function ChatViewContent(props: ChatViewProps) {
           planSidebarDismissedForTurnRef.current = null;
           if (activeThreadRef) {
             useRightPanelStore.getState().open(activeThreadRef, "plan");
+            openCenterPlanTab();
           }
         }
         sendInFlightRef.current = false;
@@ -5476,17 +4631,15 @@ function ChatViewContent(props: ChatViewProps) {
     }
   };
 
-  const onExpandTimelineImage = useCallback((preview: ExpandedImagePreview) => {
-    setExpandedImage(preview);
-  }, []);
   const onOpenTurnDiff = useCallback(
     (turnId: TurnId, filePath?: string) => {
       if (!isServerThread || !activeThreadRef) return;
       useDiffPanelStore.getState().selectTurn(activeThreadRef, turnId, filePath);
       useRightPanelStore.getState().open(activeThreadRef, "diff");
+      openCenterDiffTab({ revealPath: Boolean(filePath) });
       onDiffPanelOpen?.();
     },
-    [activeThreadRef, isServerThread, onDiffPanelOpen],
+    [activeThreadRef, isServerThread, onDiffPanelOpen, openCenterDiffTab],
   );
   // Both the Map and the revert handler are read from refs at call-time so
   // the callback reference is fully stable and never busts context identity.
@@ -5507,107 +4660,8 @@ function ChatViewContent(props: ChatViewProps) {
     return <NoActiveThreadState />;
   }
 
-  const panelToggleControls = (
-    <PanelLayoutControls
-      terminalAvailable={activeProject !== null}
-      terminalOpen={terminalUiState.terminalOpen}
-      terminalShortcutLabel={shortcutLabelForCommand(keybindings, "terminal.toggle")}
-      rightPanelAvailable={activeProject !== null}
-      rightPanelOpen={rightPanelOpen}
-      rightPanelShortcutLabel={shortcutLabelForCommand(keybindings, "rightPanel.toggle")}
-      onToggleTerminal={toggleTerminalVisibility}
-      onToggleRightPanel={toggleRightPanel}
-    />
-  );
-  const panelLayoutControls = (
-    <div className="workspace-titlebar-controls z-50 gap-1 [-webkit-app-region:no-drag]">
-      {rightPanelOpen && !shouldUsePlanSidebarSheet ? (
-        <RightPanelMaximizeControl
-          maximized={rightPanelMaximized}
-          onToggle={toggleRightPanelMaximized}
-        />
-      ) : null}
-      {panelToggleControls}
-    </div>
-  );
-  const rightPanelContent = activeThreadRef ? (
-    activeRightPanelSurface?.kind === "preview" ? (
-      <Suspense fallback={null}>
-        <PreviewPanel
-          mode="embedded"
-          threadRef={activeThreadRef}
-          tabId={activeRightPanelSurface.resourceId}
-          configuredUrls={configuredPreviewUrls}
-          visible
-        />
-      </Suspense>
-    ) : activeRightPanelSurface?.kind === "terminal" ? (
-      <PersistentThreadTerminalPanel
-        threadRef={activeThreadRef}
-        surface={activeRightPanelSurface}
-        launchContext={activeTerminalLaunchContext ?? null}
-        focusRequestId={terminalFocusRequestId}
-        keybindings={keybindings}
-        onAddTerminalContext={addTerminalContextToDraft}
-        onSplitTerminal={splitPanelTerminal}
-        onSplitTerminalVertical={splitPanelTerminalVertical}
-        onNewTerminal={addTerminalSurface}
-        onActiveTerminalChange={activatePanelTerminal}
-        onCloseTerminal={closePanelTerminal}
-        splitShortcutLabel={splitTerminalShortcutLabel ?? undefined}
-        splitVerticalShortcutLabel={splitTerminalVerticalShortcutLabel ?? undefined}
-        newShortcutLabel={newTerminalShortcutLabel ?? undefined}
-        closeShortcutLabel={closeTerminalShortcutLabel ?? undefined}
-      />
-    ) : activeRightPanelSurface?.kind === "diff" ? (
-      <Suspense fallback={null}>
-        <DiffPanel
-          key={`${activeThreadKey}:${diffPanelGitStatusResolutionKey}`}
-          mode="embedded"
-          composerDraftTarget={composerDraftTarget}
-          initialGitScope={initialDiffPanelGitScope}
-        />
-      </Suspense>
-    ) : activeRightPanelSurface?.kind === "plan" ? (
-      <PlanSidebar
-        activePlan={activePlan}
-        activeProposedPlan={sidebarProposedPlan}
-        label={planSidebarLabel}
-        environmentId={environmentId}
-        threadRef={activeThreadRef}
-        markdownCwd={gitCwd ?? undefined}
-        workspaceRoot={activeWorkspaceRoot}
-        timestampFormat={timestampFormat}
-        mode="embedded"
-      />
-    ) : (activeRightPanelSurface?.kind === "files" || activeRightPanelSurface?.kind === "file") &&
-      activeProject &&
-      activeWorkspaceRoot ? (
-      <Suspense fallback={null}>
-        <FilePreviewPanel
-          key={`${activeProject.environmentId}:${activeWorkspaceRoot}`}
-          environmentId={activeProject.environmentId}
-          cwd={activeWorkspaceRoot}
-          projectName={activeProject.title}
-          threadRef={activeThreadRef}
-          composerDraftTarget={composerDraftTarget}
-          keybindings={keybindings}
-          availableEditors={availableEditors}
-          relativePath={
-            activeRightPanelSurface.kind === "file" ? activeRightPanelSurface.relativePath : null
-          }
-          revealLine={activeFileSurface?.revealLine ?? null}
-          revealRequestId={activeFileSurface?.revealRequestId ?? 0}
-          onOpenFile={openFileSurface}
-          onPendingChange={handleFilePendingChange}
-        />
-      </Suspense>
-    ) : null
-  ) : null;
-
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
-      {rightPanelOpen && !shouldUsePlanSidebarSheet ? panelLayoutControls : null}
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
@@ -5631,28 +4685,32 @@ function ChatViewContent(props: ChatViewProps) {
             COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
           )}
         >
-          {!rightPanelOpen ? panelLayoutControls : null}
-          <ChatHeader
-            activeThreadEnvironmentId={activeThread.environmentId}
-            activeThreadId={activeThread.id}
-            {...(routeKind === "draft" && draftId ? { draftId } : {})}
-            activeThreadTitle={activeThread.title}
-            activeProjectName={activeProject?.title}
-            activeProjectCwd={activeProject?.workspaceRoot ?? null}
-            openInCwd={gitCwd}
-            activeProjectScripts={activeProject?.scripts}
-            preferredScriptId={
-              activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
-            }
-            keybindings={keybindings}
-            availableEditors={availableEditors}
-            rightPanelOpen={rightPanelOpen}
-            gitCwd={gitCwd}
-            onRunProjectScript={runProjectScript}
-            onAddProjectScript={saveProjectScript}
-            onUpdateProjectScript={updateProjectScript}
-            onDeleteProjectScript={deleteProjectScript}
-          />
+          {/*
+           * The project/thread breadcrumb, the `OpenInPicker`/
+           * `GitActionsControl` actions, and the right-panel layout controls
+           * (`PanelLayoutControls`/`RightPanelMaximizeControl`) this header
+           * used to render now all live once, in the singleton
+           * `CenterTabsHost` topbar (see `CenterTabsHost.tsx`'s
+           * `CenterTabsTopBarActions`/`CenterTabsPanelControls`), reflecting
+           * whichever thread tab was last-active — this per-`ChatView`
+           * header only keeps the scripts control (see the
+           * `projectScriptFileScripts` comment above for why that one didn't
+           * move).
+           */}
+          {activeProject?.scripts && (
+            <div className="flex min-w-0 flex-1 items-center justify-end gap-2 [-webkit-app-region:no-drag]">
+              <ProjectScriptsControl
+                scripts={activeProject.scripts}
+                fileScripts={projectScriptFileScripts}
+                keybindings={keybindings}
+                preferredScriptId={lastInvokedScriptByProjectId[activeProject.id] ?? null}
+                onRunScript={runProjectScript}
+                onAddScript={saveProjectScript}
+                onUpdateScript={updateProjectScript}
+                onDeleteScript={deleteProjectScript}
+              />
+            </div>
+          )}
         </header>
 
         <ThreadErrorBanner
@@ -5828,7 +4886,7 @@ function ChatViewContent(props: ChatViewProps) {
                             resolvedTheme={resolvedTheme}
                             settings={settings}
                             keybindings={keybindings}
-                            terminalOpen={Boolean(terminalUiState.terminalOpen)}
+                            terminalOpen={Boolean(routeThreadTerminalOpen)}
                             gitCwd={gitCwd}
                             promptRef={promptRef}
                             composerImagesRef={composerImagesRef}
@@ -5863,7 +4921,7 @@ function ChatViewContent(props: ChatViewProps) {
                       </div>
                       <div className="min-h-0">
                         <div
-                          data-terminal-open={terminalUiState.terminalOpen ? "true" : undefined}
+                          data-terminal-open={routeThreadTerminalOpen ? "true" : undefined}
                           className="relative z-0"
                         >
                           {showComposerContextStrip && (
@@ -5957,81 +5015,65 @@ function ChatViewContent(props: ChatViewProps) {
           {/* end chat column */}
         </div>
         {/* end horizontal flex container */}
-
-        {mountedTerminalThreadRefs.map(({ key: mountedThreadKey, threadRef: mountedThreadRef }) => (
-          <PersistentThreadTerminalDrawer
-            key={mountedThreadKey}
-            threadRef={mountedThreadRef}
-            threadId={mountedThreadRef.threadId}
-            visible={mountedThreadKey === activeThreadKey && terminalUiState.terminalOpen}
-            launchContext={
-              mountedThreadKey === activeThreadKey ? (activeTerminalLaunchContext ?? null) : null
-            }
-            focusRequestId={mountedThreadKey === activeThreadKey ? terminalFocusRequestId : 0}
-            splitShortcutLabel={splitTerminalShortcutLabel ?? undefined}
-            splitVerticalShortcutLabel={splitTerminalVerticalShortcutLabel ?? undefined}
-            newShortcutLabel={newTerminalShortcutLabel ?? undefined}
-            closeShortcutLabel={closeTerminalShortcutLabel ?? undefined}
-            keybindings={keybindings}
-            onAddTerminalContext={addTerminalContextToDraft}
-          />
-        ))}
       </div>
 
-      {!shouldUsePlanSidebarSheet && rightPanelOpen && activeThreadRef ? (
-        <RightPanelTabs
-          mode="inline"
-          maximized={rightPanelMaximized}
-          surfaces={rightPanelState.surfaces}
-          activeSurfaceId={activeRightPanelSurface?.id ?? null}
-          pendingSurfaceIds={pendingFileSurfaceIds}
-          previewSessions={activePreviewState.sessions}
-          terminalLabelsById={activeTerminalLabelsById}
-          onActivate={activateRightPanelSurface}
-          onCloseSurface={closeRightPanelSurface}
-          onCloseOtherSurfaces={closeOtherRightPanelSurfaces}
-          onCloseSurfacesToRight={closeRightPanelSurfacesToRight}
-          onCloseAllSurfaces={closeAllRightPanelSurfaces}
-          onCopyFilePath={copyRightPanelFilePath}
-          onAddBrowser={createBrowserSurface}
-          onAddTerminal={addTerminalSurface}
-          onAddDiff={addDiffSurface}
-          onAddFiles={addFilesSurface}
-          browserAvailable={isPreviewSupportedInRuntime()}
-          diffAvailable={isServerThread && isGitRepo}
-          filesAvailable={activeProject !== null}
-        >
-          {rightPanelContent}
-        </RightPanelTabs>
-      ) : null}
-      {shouldUsePlanSidebarSheet && rightPanelOpen && activeThreadRef ? (
-        <RightPanelSheet open onClose={planSidebarOpen ? closePlanSidebar : closePreviewPanel}>
-          <RightPanelTabs
-            mode="sheet"
-            layoutControls={panelToggleControls}
-            surfaces={rightPanelState.surfaces}
-            activeSurfaceId={activeRightPanelSurface?.id ?? null}
-            pendingSurfaceIds={pendingFileSurfaceIds}
-            previewSessions={activePreviewState.sessions}
-            terminalLabelsById={activeTerminalLabelsById}
-            onActivate={activateRightPanelSurface}
-            onCloseSurface={closeRightPanelSurface}
-            onCloseOtherSurfaces={closeOtherRightPanelSurfaces}
-            onCloseSurfacesToRight={closeRightPanelSurfacesToRight}
-            onCloseAllSurfaces={closeAllRightPanelSurfaces}
-            onCopyFilePath={copyRightPanelFilePath}
-            onAddBrowser={createBrowserSurface}
-            onAddTerminal={addTerminalSurface}
-            onAddDiff={addDiffSurface}
-            onAddFiles={addFilesSurface}
-            browserAvailable={isPreviewSupportedInRuntime()}
-            diffAvailable={isServerThread && isGitRepo}
-            filesAvailable={activeProject !== null}
-          >
-            {rightPanelContent}
-          </RightPanelTabs>
-        </RightPanelSheet>
-      ) : null}
+      {/*
+       * Right sidebar boundary (Phase 2, step 1 of the VSCode-style tab layout
+       * redesign): the rightPanelStore-driven surfaces (files/diff/plan/
+       * preview/terminal) plus the Phase 1 CenterTabsHost mount point, both
+       * mechanically relocated to RightSidebar.tsx. This is still a single
+       * instance per single-threaded route — no behavior change.
+       */}
+      {embedded ? null : (
+        <RightSidebar
+          shouldUsePlanSidebarSheet={shouldUsePlanSidebarSheet}
+          rightPanelOpen={rightPanelOpen}
+          rightPanelMaximized={rightPanelMaximized}
+          panelToggleControls={panelToggleControls}
+          planSidebarOpen={planSidebarOpen}
+          closePlanSidebar={closePlanSidebar}
+          closePreviewPanel={closePreviewPanel}
+          environmentId={environmentId}
+          activeThreadRef={activeThreadRef}
+          activeThreadKey={activeThreadKey}
+          isServerThread={isServerThread}
+          isGitRepo={isGitRepo}
+          composerDraftTarget={composerDraftTarget}
+          keybindings={keybindings}
+          availableEditors={availableEditors}
+          gitCwd={gitCwd}
+          activeWorkspaceRoot={activeWorkspaceRoot}
+          timestampFormat={timestampFormat}
+          activeProject={activeProject}
+          rightPanelState={rightPanelState}
+          activeRightPanelSurface={activeRightPanelSurface}
+          activeFileSurface={activeFileSurface}
+          pendingFileSurfaceIds={pendingFileSurfaceIds}
+          activePreviewState={activePreviewState}
+          configuredPreviewUrls={configuredPreviewUrls}
+          terminalFocusRequestId={terminalFocusRequestId}
+          activeDiffFileListFiles={activeDiffFileListFiles}
+          activeDiffSelectedFilePath={activeDiffSelectedFilePath}
+          onSelectDiffFileListRow={onSelectDiffFileListRow}
+          diffPanelGitStatusResolutionKey={diffPanelGitStatusResolutionKey}
+          initialDiffPanelGitScope={initialDiffPanelGitScope}
+          activePlan={activePlan}
+          sidebarProposedPlan={sidebarProposedPlan}
+          planSidebarLabel={planSidebarLabel}
+          openFileSurface={openFileSurface}
+          handleFilePendingChange={handleFilePendingChange}
+          addTerminalContextToDraft={addTerminalContextToDraft}
+          activateRightPanelSurface={activateRightPanelSurface}
+          closeRightPanelSurface={closeRightPanelSurface}
+          closeOtherRightPanelSurfaces={closeOtherRightPanelSurfaces}
+          closeRightPanelSurfacesToRight={closeRightPanelSurfacesToRight}
+          closeAllRightPanelSurfaces={closeAllRightPanelSurfaces}
+          copyRightPanelFilePath={copyRightPanelFilePath}
+          createBrowserSurface={createBrowserSurface}
+          addDiffSurface={addDiffSurface}
+          addFilesSurface={addFilesSurface}
+        />
+      )}
 
       {expandedImage && (
         <ExpandedImageDialog

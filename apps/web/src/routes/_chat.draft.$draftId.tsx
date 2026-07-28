@@ -1,17 +1,26 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import ChatView from "../components/ChatView";
+
+import { scopeProjectRef } from "@eflob/client-runtime/environment";
+
 import { threadHasStarted } from "../components/ChatView.logic";
+import { useCenterTabsStore } from "../centerTabsStore";
 import {
   DraftId,
   markPromotedDraftThreadByRef,
   useComposerDraftStore,
 } from "../composerDraftStore";
-import { SidebarInset } from "../components/ui/sidebar";
 import { waitForDraftHeroTransition } from "../components/chat/draftHeroTransition";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { useThread, useThreadRefs } from "../state/entities";
 
+/**
+ * VSCode-style tab layout redesign, Phase 2: sync-only shim — see the sibling
+ * `_chat.$environmentId.$threadId.tsx` doc comment. `CenterTabsHostRoot`
+ * (mounted from `_chat.tsx`) now owns rendering this draft thread's
+ * `ChatView`; this route only keeps `centerTabsStore` in sync with the URL
+ * and handles the draft-to-server promotion redirect.
+ */
 function DraftChatThreadRouteView() {
   const navigate = useNavigate();
   const { draftId: rawDraftId } = Route.useParams();
@@ -66,21 +75,19 @@ function DraftChatThreadRouteView() {
     void navigate({ to: "/", replace: true });
   }, [canonicalThreadRef, draftSession, navigate]);
 
-  if (!draftSession) {
-    return null;
-  }
+  useEffect(() => {
+    if (!draftSession) {
+      return;
+    }
+    useCenterTabsStore
+      .getState()
+      .openThreadTab(scopeProjectRef(draftSession.environmentId, draftSession.projectId), {
+        kind: "draft",
+        draftId,
+      });
+  }, [draftId, draftSession]);
 
-  return (
-    <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground md:h-dvh">
-      <ChatView
-        draftId={draftId}
-        environmentId={draftSession.environmentId}
-        threadId={draftSession.threadId}
-        routeKind="draft"
-        forceExpandedMobileComposer
-      />
-    </SidebarInset>
-  );
+  return null;
 }
 
 export const Route = createFileRoute("/_chat/draft/$draftId")({

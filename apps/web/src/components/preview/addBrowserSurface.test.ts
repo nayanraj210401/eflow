@@ -49,4 +49,18 @@ describe("addBrowserSurface", () => {
       ).surfaces.map((surface) => surface.id),
     ).toEqual(["browser:tab-1", "browser:tab-2"]);
   });
+
+  it("calls onOpened with the new tab's snapshot once the surface is open", async () => {
+    const first = snapshot("tab-1");
+    const openPreview = vi.fn(async (_input: PreviewOpenInput) => AsyncResult.success(first));
+    const onOpened = vi.fn();
+
+    await addBrowserSurface({
+      threadRef,
+      openPreview: ({ input }) => openPreview(input),
+      onOpened,
+    });
+
+    expect(onOpened).toHaveBeenCalledWith(first);
+  });
 });

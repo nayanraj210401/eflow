@@ -55,6 +55,16 @@ function getClientSettingsSnapshot(): ClientSettings {
   return clientSettingsSnapshot;
 }
 
+/**
+ * Synchronous, non-hook read of the current client settings snapshot — for
+ * plain (non-React) call sites like zustand store actions that can't call
+ * `useClientSettings`. Returns `DEFAULT_CLIENT_SETTINGS` before hydration
+ * completes, same as the hook's `getServerSnapshot` fallback.
+ */
+export function readClientSettings(): ClientSettings {
+  return getClientSettingsSnapshot();
+}
+
 function replaceClientSettingsSnapshot(settings: ClientSettings): void {
   clientSettingsSnapshot = settings;
   emitClientSettingsChange();
