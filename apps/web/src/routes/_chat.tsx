@@ -10,7 +10,7 @@ import { openCommandPalette } from "../commandPaletteBus";
 import { CenterTabsHostRoot } from "../components/CenterTabsHostRoot";
 import { useCenterTabsStore } from "../centerTabsStore";
 import { useComposerDraftStore } from "../composerDraftStore";
-import { useEnvironmentThreadRefs, useProjects, useThreadShell } from "../state/entities";
+import { useProjects, useThreadShell, useThreadShellsForProjectRefs } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { selectProjectGroupingSettings } from "../logicalProject";
 import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
@@ -210,36 +210,52 @@ function ChatRouteGlobalShortcuts() {
 
 /**
  * Cleans up `centerTabsStore` thread tabs for threads/drafts that no longer
- * exist in the active project (deleted server threads, discarded drafts).
- * Runs alongside `CenterTabsHostRoot`'s mount so stale tabs don't linger in
- * the tab strip/persisted storage forever.
+ * exist in the active project (deleted server threads, discarded drafts,
+ * *and* threads that belong to some other project on the same environment —
+ * a stale/mis-scoped tab from a fixed bug can otherwise linger in the tab
+ * strip/persisted storage forever, since it will never age out on its own).
+ * Runs alongside `CenterTabsHostRoot`'s mount so this self-heals on load
+ * rather than requiring every user to clear localStorage.
+ *
+ * Deliberately scoped to `projectThreadRefs` (this project's own threads via
+ * `useThreadShellsForProjectRefs`), not every thread in the environment —
+ * a single environment (connection) can host multiple projects, and a thread
+ * key that merely exists *somewhere* in the environment doesn't mean it
+ * belongs in *this* project's bucket.
  */
 function useReconcileCenterThreadTabs(projectRef: ScopedProjectRef | null) {
   const environmentId = projectRef?.environmentId ?? null;
-  const environmentThreadRefs = useEnvironmentThreadRefs(environmentId);
+  const projectRefsForThreadLookup = useMemo(() => (projectRef ? [projectRef] : []), [projectRef]);
+  const projectThreadShells = useThreadShellsForProjectRefs(projectRefsForThreadLookup);
   // Select the stable underlying record (not a derived array/object literal)
   // so zustand's default `Object.is` snapshot comparison doesn't see a "new"
   // value on every render and loop forever re-rendering.
   const draftThreadsByThreadKey = useComposerDraftStore((store) => store.draftThreadsByThreadKey);
   const draftIds = useMemo(
     () =>
-      environmentId
+      projectRef
         ? Object.entries(draftThreadsByThreadKey)
-            .filter(([, draftThread]) => draftThread.environmentId === environmentId)
+            .filter(
+              ([, draftThread]) =>
+                draftThread.environmentId === projectRef.environmentId &&
+                draftThread.projectId === projectRef.projectId,
+            )
             .map(([draftId]) => draftId)
         : [],
-    [draftThreadsByThreadKey, environmentId],
+    [draftThreadsByThreadKey, projectRef],
   );
 
   useEffect(() => {
-    if (!projectRef) return;
-    const threadKeys = new Set(environmentThreadRefs.map((ref) => scopedThreadKey(ref)));
+    if (!projectRef || !environmentId) return;
+    const threadKeys = new Set(
+      projectThreadShells.map((shell) => scopedThreadKey({ environmentId, threadId: shell.id })),
+    );
     const draftIdSet = new Set(draftIds);
     useCenterTabsStore.getState().reconcileThreadTabs(projectRef, {
       threadKeys,
       draftIds: draftIdSet,
     });
-  }, [projectRef, environmentThreadRefs, draftIds]);
+  }, [projectRef, environmentId, projectThreadShells, draftIds]);
 }
 
 /** Aggregates every live preview session across all threads in the environment, keyed by preview tab id, for `CenterTabBar`'s label/favicon lookups. */
