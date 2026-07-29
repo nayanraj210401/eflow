@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { isElectron } from "~/env";
 import { cn } from "~/lib/utils";
 
+import { PanelTopBar } from "./PanelTopBar";
 import { Skeleton } from "./ui/skeleton";
 
 export type DiffPanelMode = "inline" | "sheet" | "sidebar" | "embedded";
@@ -12,7 +13,7 @@ function getDiffPanelHeaderRowClassName(mode: DiffPanelMode) {
   return cn(
     "flex items-center justify-between gap-2 px-4",
     shouldUseDragRegion
-      ? "drag-region h-[52px] border-b border-border wco:h-[env(titlebar-area-height)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]"
+      ? "border-b border-border wco:h-[env(titlebar-area-height)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]"
       : "surface-subheader",
   );
 }
@@ -34,7 +35,9 @@ export function DiffPanelShell(props: {
       )}
     >
       {shouldUseDragRegion ? (
-        <div className={getDiffPanelHeaderRowClassName(props.mode)}>{props.header}</div>
+        <PanelTopBar dragRegion className={getDiffPanelHeaderRowClassName(props.mode)}>
+          {props.header}
+        </PanelTopBar>
       ) : (
         <div className={getDiffPanelHeaderRowClassName(props.mode)} data-surface-subheader>
           {props.header}

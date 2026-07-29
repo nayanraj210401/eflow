@@ -39,13 +39,17 @@ export function CenterTabsBreadcrumb({
   ownsDesktopTitleBar,
   className,
 }: CenterTabsBreadcrumbProps) {
-  if (!projectName && !threadName) return null;
+  // Even with nothing to show yet, a row that owns the desktop title bar must
+  // still render — otherwise its drag-region/traffic-light inset disappears
+  // along with it, and whatever renders below (e.g. `CenterTabBar`'s tab
+  // strip) ends up flush under the traffic lights with no protection at all.
+  if (!projectName && !threadName && !ownsDesktopTitleBar) return null;
 
   return (
     <div
       className={cn(
-        "flex h-8 shrink-0 items-center gap-1.5 border-b border-border/60 px-3 text-xs text-muted-foreground select-none",
-        ownsDesktopTitleBar && "drag-region",
+        "flex h-8 shrink-0 items-center gap-1.5 border-b border-border/60 pr-3 text-xs text-muted-foreground select-none",
+        ownsDesktopTitleBar ? "pl-[var(--workspace-titlebar-content-left)] drag-region" : "pl-3",
         className,
       )}
       data-center-tabs-breadcrumb
