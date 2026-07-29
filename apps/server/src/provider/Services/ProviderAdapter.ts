@@ -120,6 +120,13 @@ export interface ProviderAdapterShape<TError> {
   readonly stopAll: () => Effect.Effect<void, TError>;
 
   /**
+   * Query the provider on demand for fresh account-level rate-limit usage,
+   * for any adapter that supports it. A no-op for adapters without an
+   * authoritative usage endpoint, or when no session is currently active.
+   */
+  readonly refreshAccountUsage: () => Effect.Effect<void>;
+
+  /**
    * Canonical runtime event stream emitted by this adapter.
    */
   readonly streamEvents: Stream.Stream<ProviderRuntimeEvent>;

@@ -87,6 +87,15 @@ export interface ProviderServiceShape {
   readonly listSessions: () => Effect.Effect<ReadonlyArray<ProviderSession>>;
 
   /**
+   * Ask every registered adapter to refresh account-level usage on demand.
+   *
+   * Best-effort: adapters without an authoritative usage endpoint (or with
+   * no active session) no-op. Refreshed snapshots surface asynchronously
+   * through the runtime event stream, not this call's return value.
+   */
+  readonly refreshAccountUsage: () => Effect.Effect<void>;
+
+  /**
    * Read capabilities for the adapter bound to a configured provider instance.
    */
   readonly getCapabilities: (

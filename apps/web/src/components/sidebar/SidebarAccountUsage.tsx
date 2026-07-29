@@ -1,10 +1,19 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { BurnRateLevel, BurnRateSnapshot, ProviderDriverKind } from "@eflob/contracts";
-import { memo, useMemo } from "react";
+import { isAtomCommandInterrupted } from "@eflob/client-runtime/state/runtime";
+import { LoaderIcon, RefreshCwIcon } from "lucide-react";
+import { memo, useCallback, useMemo, useState } from "react";
 
 import { cn } from "../../lib/utils";
-import { primaryServerAccountUsageAtom, primaryServerBurnRateAtom } from "../../state/server";
+import { usePrimaryEnvironment } from "../../state/environments";
+import {
+  primaryServerAccountUsageAtom,
+  primaryServerBurnRateAtom,
+  serverEnvironment,
+} from "../../state/server";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { getDriverOption } from "../settings/providerDriverMeta";
+import { Button } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { useSidebar } from "../ui/sidebar";
 import {
@@ -178,6 +187,32 @@ export const SidebarAccountUsage = memo(function SidebarAccountUsage() {
     [burnRateSnapshots],
   );
 
+  const primaryEnvironment = usePrimaryEnvironment();
+  // Also refreshes the 5h burn-rate sample: BurnRate derives its "5h" bucket
+  // from AccountUsage.streamChanges (see apps/server BurnRate.ts), so the
+  // fresh `account.rate-limits.updated` this triggers feeds both.
+  const refreshAccountUsage = useAtomCommand(serverEnvironment.refreshAccountUsage, {
+    reportFailure: false,
+  });
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const handleRefresh = useCallback(() => {
+    if (isRefreshing || !primaryEnvironment) return;
+    setIsRefreshing(true);
+    void (async () => {
+      const result = await refreshAccountUsage({
+        environmentId: primaryEnvironment.environmentId,
+        input: {},
+      });
+      setIsRefreshing(false);
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        console.warn("Failed to refresh account usage", {
+          operation: "refresh-account-usage",
+          environmentId: primaryEnvironment.environmentId,
+        });
+      }
+    })();
+  }, [isRefreshing, primaryEnvironment, refreshAccountUsage]);
+
   if (rows.length === 0) {
     return null;
   }
@@ -241,11 +276,28 @@ export const SidebarAccountUsage = memo(function SidebarAccountUsage() {
         <div className="flex flex-col gap-2.5 p-3">
           <div className="flex items-center justify-between gap-3">
             <div className="font-medium text-muted-foreground text-xs">Usage limits</div>
-            {account?.planLabel ? (
-              <div className="truncate text-[11px] text-muted-foreground/70">
-                {account.planLabel}
-              </div>
-            ) : null}
+            <div className="flex min-w-0 items-center gap-2">
+              {account?.planLabel ? (
+                <div className="truncate text-[11px] text-muted-foreground/70">
+                  {account.planLabel}
+                </div>
+              ) : null}
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="ghost"
+                className="size-5 shrink-0 rounded-sm p-0 text-muted-foreground hover:text-foreground"
+                disabled={isRefreshing}
+                onClick={handleRefresh}
+                aria-label="Refresh usage limits and burn rate"
+              >
+                {isRefreshing ? (
+                  <LoaderIcon className="size-3 animate-spin" />
+                ) : (
+                  <RefreshCwIcon className="size-3" />
+                )}
+              </Button>
+            </div>
           </div>
           {rows.map((row) => (
             <UsageDetailRow

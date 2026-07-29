@@ -961,6 +961,16 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     },
   );
 
+  const refreshAccountUsage: ProviderServiceMethod<"refreshAccountUsage"> = Effect.fn(
+    "refreshAccountUsage",
+  )(function* () {
+    const currentAdapters = yield* getAdapterEntries;
+    yield* Effect.forEach(currentAdapters, ([, adapter]) => adapter.refreshAccountUsage(), {
+      concurrency: "unbounded",
+      discard: true,
+    });
+  });
+
   const getCapabilities: ProviderServiceMethod<"getCapabilities"> = (instanceId) =>
     registry.getByInstance(instanceId).pipe(Effect.map((adapter) => adapter.capabilities));
 
@@ -1076,6 +1086,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     respondToUserInput,
     stopSession,
     listSessions,
+    refreshAccountUsage,
     getCapabilities,
     getInstanceInfo,
     rollbackConversation,

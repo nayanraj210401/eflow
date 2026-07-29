@@ -1435,6 +1435,8 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
     const stopAll: GrokAdapterShape["stopAll"] = () =>
       Effect.forEach(Array.from(sessions.values()), stopSessionInternal, { discard: true });
 
+    const refreshAccountUsage: GrokAdapterShape["refreshAccountUsage"] = () => Effect.void;
+
     yield* Effect.addFinalizer(() =>
       Effect.ignore(stopAll()).pipe(
         Effect.tap(() => PubSub.shutdown(runtimeEventPubSub)),
@@ -1458,6 +1460,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
       listSessions,
       hasSession,
       stopAll,
+      refreshAccountUsage,
       streamEvents,
     } satisfies GrokAdapterShape;
   });
