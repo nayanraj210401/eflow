@@ -372,11 +372,10 @@ export function CenterTabsHost({
          * traffic-light-inset drag region when this host is the desktop
          * title bar owner — `CenterTabBar` is always passed `false` here so
          * the drag region isn't duplicated/fought over between the two rows.
-         * When there's no project/thread to show yet, the breadcrumb renders
-         * `null` (see `CenterTabsBreadcrumb`), which would silently drop the
-         * drag region; that's an acceptable, narrow gap (matches the
-         * pre-existing behavior of `CenterTabBar` itself rendering `null`
-         * when there are no visible tabs) rather than a regression.
+         * `CenterTabsBreadcrumb` keeps rendering (as an empty spacer) even
+         * with no project/thread to show yet whenever it owns the title bar,
+         * so the drag region and traffic-light inset are never silently
+         * dropped — see the guard in that component.
          */}
         <div className="flex items-stretch">
           <CenterTabsBreadcrumb
