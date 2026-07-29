@@ -1,7 +1,7 @@
 import type { PreviewSessionSnapshot, ScopedProjectRef } from "@eflob/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { ClipboardList, FileDiff, Globe2, MessageSquare } from "lucide-react";
-import { useMemo } from "react";
+import { ClipboardList, FileDiff, Globe2, MessageSquare, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { scopedProjectKey, scopedThreadKey } from "@eflob/client-runtime/environment";
 
@@ -11,6 +11,7 @@ import { useTheme } from "~/hooks/useTheme";
 import { useThreadShells } from "~/state/entities";
 import { buildDraftThreadRouteParams, buildThreadRouteParams } from "~/threadRoutes";
 
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/components/ui/menu";
 import { TabStrip, type TabStripItem } from "~/components/ui/tabs";
 import {
   type CenterTab,
@@ -80,6 +81,64 @@ export interface CenterTabBarProps {
   previewSessions: Readonly<Record<string, PreviewSessionSnapshot>>;
   ownsDesktopTitleBar?: boolean;
   className?: string;
+  /** Always enabled: starts a new draft chat thread. */
+  onNewChat: () => void;
+  /** `null` disables the "Preview" menu item (no active thread to attach a preview to). */
+  onOpenPreview: (() => void) | null;
+  /** `null` disables the "Changes" menu item (no active thread to show a diff for). */
+  onOpenDiff: (() => void) | null;
+}
+
+/** The "+" button rendered as the tab strip's `trailingActions`, offering ways to open a new tab. */
+function AddTabMenu({
+  onNewChat,
+  onOpenPreview,
+  onOpenDiff,
+}: {
+  onNewChat: () => void;
+  onOpenPreview: (() => void) | null;
+  onOpenDiff: (() => void) | null;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Menu open={open} onOpenChange={setOpen}>
+      <MenuTrigger
+        className="relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+        aria-label="Open a new tab"
+      >
+        <Plus className="size-3.5" />
+      </MenuTrigger>
+      <MenuPopup align="end" side="bottom" sideOffset={6} className="min-w-44">
+        <MenuItem
+          onClick={() => {
+            onNewChat();
+            setOpen(false);
+          }}
+        >
+          New chat
+        </MenuItem>
+        <MenuItem
+          disabled={!onOpenPreview}
+          onClick={() => {
+            onOpenPreview?.();
+            setOpen(false);
+          }}
+        >
+          Preview
+        </MenuItem>
+        <MenuItem
+          disabled={!onOpenDiff}
+          onClick={() => {
+            onOpenDiff?.();
+            setOpen(false);
+          }}
+        >
+          Changes
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
+  );
 }
 
 /**
@@ -91,6 +150,9 @@ export function CenterTabBar({
   previewSessions,
   ownsDesktopTitleBar,
   className,
+  onNewChat,
+  onOpenPreview,
+  onOpenDiff,
 }: CenterTabBarProps) {
   const { resolvedTheme } = useTheme();
   const navigate = useNavigate();
@@ -232,6 +294,9 @@ export function CenterTabBar({
       onCloseToRight={onCloseToRight}
       onCloseAll={onCloseAll}
       ownsDesktopTitleBar={ownsDesktopTitleBar ?? false}
+      trailingActions={
+        <AddTabMenu onNewChat={onNewChat} onOpenPreview={onOpenPreview} onOpenDiff={onOpenDiff} />
+      }
       {...(className !== undefined ? { className } : {})}
     />
   );
