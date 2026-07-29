@@ -2,6 +2,8 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it as effectIt } from "@effect/vitest";
 import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -351,6 +353,23 @@ effectIt.layer(NodeServices.layer)("isCommandAvailable", (it) => {
         }).pipe(Effect.provideService(HostProcessPlatform, "win32")),
       ).toBe(false);
     }),
+  );
+
+  it.effect("resolves an absolute path candidate directly, ignoring PATH", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-editor-fallback-" });
+      const editorPath = path.join(dir, "some-editor-bin");
+      yield* fileSystem.writeFileString(editorPath, "#!/bin/sh\n");
+      yield* fileSystem.chmod(editorPath, 0o755);
+
+      expect(
+        yield* isCommandAvailable(editorPath, {
+          env: { PATH: "/definitely/not/on/path" },
+        }).pipe(Effect.provideService(HostProcessPlatform, "darwin")),
+      ).toBe(true);
+    }).pipe(Effect.scoped),
   );
 });
 
