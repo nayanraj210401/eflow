@@ -817,6 +817,32 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
+          title="Usage data"
+          description="Send anonymous usage data to help improve the product."
+          resetAction={
+            settings.enableUsageTelemetry !== DEFAULT_UNIFIED_SETTINGS.enableUsageTelemetry ? (
+              <SettingResetButton
+                label="usage data"
+                onClick={() =>
+                  updateSettings({
+                    enableUsageTelemetry: DEFAULT_UNIFIED_SETTINGS.enableUsageTelemetry,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.enableUsageTelemetry}
+              onCheckedChange={(checked) =>
+                updateSettings({ enableUsageTelemetry: Boolean(checked) })
+              }
+              aria-label="Send usage data"
+            />
+          }
+        />
+
+        <SettingsRow
           title="Auto-open task panel"
           description="Open the right-side plan and task panel automatically when steps appear."
           resetAction={
