@@ -43,6 +43,7 @@ export function usePreferredEditor(availableEditors: ReadonlyArray<EditorId>) {
 
   const effectiveEditor = useMemo(() => {
     if (lastEditor && availableEditors.includes(lastEditor)) return lastEditor;
+    if (availableEditors.includes("file-manager")) return "file-manager";
     return EDITORS.find((editor) => availableEditors.includes(editor.id))?.id ?? null;
   }, [lastEditor, availableEditors]);
 
@@ -55,7 +56,9 @@ export function resolveAndPersistPreferredEditor(
   const availableEditorIds = new Set(availableEditors);
   const stored = getLocalStorageItem(LAST_EDITOR_KEY, EditorId);
   if (stored && availableEditorIds.has(stored)) return stored;
-  const editor = EDITORS.find((editor) => availableEditorIds.has(editor.id))?.id ?? null;
+  const editor = availableEditorIds.has("file-manager")
+    ? "file-manager"
+    : (EDITORS.find((editor) => availableEditorIds.has(editor.id))?.id ?? null);
   if (editor) setLocalStorageItem(LAST_EDITOR_KEY, editor, EditorId);
   return editor ?? null;
 }
