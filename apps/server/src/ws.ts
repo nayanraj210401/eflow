@@ -77,6 +77,7 @@ import {
   observeRpcStreamEffect as instrumentRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
 import * as AccountUsageService from "./provider/Services/AccountUsage.ts";
+import * as BurnRateService from "./provider/Services/BurnRate.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
@@ -421,6 +422,7 @@ const makeWsRpcLayer = (
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
       const accountUsage = yield* AccountUsageService.AccountUsage;
+      const burnRate = yield* BurnRateService.BurnRate;
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const config = yield* ServerConfig.ServerConfig;
@@ -1100,6 +1102,7 @@ const makeWsRpcLayer = (
           shellResumeCompletionMarker: true,
           threadResumeCompletionMarker: true,
           accountUsage: yield* accountUsage.getSnapshots,
+          burnRate: yield* burnRate.getSnapshots,
         };
       });
 
@@ -2021,6 +2024,13 @@ const makeWsRpcLayer = (
                   payload: { accountUsage: snapshots },
                 })),
               );
+              const burnRateUpdates = burnRate.streamChanges.pipe(
+                Stream.map((snapshots) => ({
+                  version: 1 as const,
+                  type: "burnRate" as const,
+                  payload: { burnRate: snapshots },
+                })),
+              );
 
               yield* providerRegistry
                 .refresh()
@@ -2028,7 +2038,10 @@ const makeWsRpcLayer = (
 
               const liveUpdates = Stream.merge(
                 keybindingsUpdates,
-                Stream.merge(providerStatuses, Stream.merge(settingsUpdates, accountUsageUpdates)),
+                Stream.merge(
+                  providerStatuses,
+                  Stream.merge(settingsUpdates, Stream.merge(accountUsageUpdates, burnRateUpdates)),
+                ),
               );
 
               return Stream.concat(

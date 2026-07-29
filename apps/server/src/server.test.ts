@@ -74,6 +74,7 @@ const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
 import * as ServerConfig from "./config.ts";
 import { makeRoutesLayer } from "./server.ts";
 import { AccountUsageLive } from "./provider/Layers/AccountUsage.ts";
+import { BurnRateLive } from "./provider/Layers/BurnRate.ts";
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as Keybindings from "./keybindings.ts";
@@ -691,9 +692,9 @@ const buildAppUnderTest = (options?: {
             latestSequence: Effect.succeed(0),
             ...options?.layers?.orchestrationEngine,
           }),
-          // Real (not mocked): pure in-memory accumulator with no external
+          // Real (not mocked): pure in-memory accumulators with no external
           // dependencies, so there's nothing worth stubbing.
-          AccountUsageLive,
+          BurnRateLive.pipe(Layer.provideMerge(AccountUsageLive)),
         ),
       ),
       Layer.provide(

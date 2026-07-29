@@ -1,4 +1,8 @@
-import type { ProviderAccountUsageSnapshots, ProviderDriverKind } from "@eflob/contracts";
+import type {
+  ProviderAccountUsageSnapshots,
+  ProviderDriverKind,
+  ProviderInstanceId,
+} from "@eflob/contracts";
 
 import { formatProviderDisplayName } from "../../lib/contextWindow";
 
@@ -11,6 +15,9 @@ export type AccountUsageTone = "ok" | "warning" | "exhausted";
 
 export type AccountUsageRow = {
   readonly id: string;
+  /** Matches `BurnRateSnapshot.instanceId`, so the component can pair a row
+   * with its burn-rate detail without re-deriving the id split. */
+  readonly instanceId: ProviderInstanceId;
   /** Kept alongside `providerLabel` so the component can render a per-driver
    * icon — with multiple providers reporting usage, the label text alone
    * doesn't scan quickly at a glance. */
@@ -66,6 +73,7 @@ export function buildAccountUsageRows(
 
       rows.push({
         id: `${snapshot.instanceId}:${window.key}`,
+        instanceId: snapshot.instanceId,
         driver: snapshot.driver,
         providerLabel: formatProviderDisplayName(snapshot.driver),
         windowLabel: window.label ?? window.key,
@@ -124,4 +132,28 @@ export function formatResetsIn(resetsAt: string | null, nowIso: string): string 
   const days = Math.floor(hours / 24);
   const leftoverHours = hours % 24;
   return leftoverHours > 0 ? `resets in ${days}d ${leftoverHours}h` : `resets in ${days}d`;
+}
+
+/** Human phrasing for a burn-rate ETA, e.g. "exhausts in ~12m" or "~2h 30m". */
+export function formatBurnRateEta(etaMinutes: number | null): string | null {
+  if (etaMinutes === null || !Number.isFinite(etaMinutes) || etaMinutes <= 0) return null;
+
+  const totalMinutes = Math.round(etaMinutes);
+  if (totalMinutes < 1) return "exhausts in <1m";
+  if (totalMinutes < 60) return `exhausts in ~${totalMinutes}m`;
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes > 0 ? `exhausts in ~${hours}h ${minutes}m` : `exhausts in ~${hours}h`;
+}
+
+/** Compact token throughput, e.g. "1.2k tok/s" or "48 tok/s". */
+export function formatTokensPerSecond(tokensPerSecond: number): string {
+  if (tokensPerSecond >= 1000) return `${(tokensPerSecond / 1000).toFixed(1)}k tok/s`;
+  return `${Math.round(tokensPerSecond)} tok/s`;
+}
+
+/** Compact cost burn rate, e.g. "$0.42/min". */
+export function formatCostPerMinute(costPerMinuteUsd: number): string {
+  return `$${costPerMinuteUsd.toFixed(costPerMinuteUsd < 1 ? 3 : 2)}/min`;
 }

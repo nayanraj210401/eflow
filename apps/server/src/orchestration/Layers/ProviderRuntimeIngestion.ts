@@ -28,6 +28,7 @@ import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@eflob/shared/DrainableWorker";
 
 import { AccountUsage } from "../../provider/Services/AccountUsage.ts";
+import { BurnRate } from "../../provider/Services/BurnRate.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
 import { ProjectionTurnRepositoryLive } from "../../persistence/Layers/ProjectionTurns.ts";
@@ -717,6 +718,7 @@ const make = Effect.gen(function* () {
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
   const providerService = yield* ProviderService;
   const accountUsage = yield* AccountUsage;
+  const burnRate = yield* BurnRate;
   const projectionTurnRepository = yield* ProjectionTurnRepository;
   const serverSettingsService = yield* ServerSettingsService;
   const providerCommandId = (event: ProviderRuntimeEvent, tag: string) =>
@@ -1841,7 +1843,12 @@ const make = Effect.gen(function* () {
           if (event.type === "account.rate-limits.updated" || event.type === "account.updated") {
             return accountUsage.recordRuntimeEvent(event);
           }
-          return worker.enqueue({ source: "runtime", event });
+          // Burn-rate sampling piggybacks on this same subscription rather than
+          // opening a second one (see the note above) — it no-ops for event
+          // types it doesn't care about, so this is safe to call unconditionally.
+          return Effect.andThen(burnRate.recordRuntimeEvent(event), () =>
+            worker.enqueue({ source: "runtime", event }),
+          );
         }),
       );
       yield* Effect.forkScoped(

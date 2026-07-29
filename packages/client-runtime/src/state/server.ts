@@ -81,6 +81,15 @@ export function applyServerConfigProjection(
         latestEvent: event,
         source: "live",
       }));
+    case "burnRate":
+      return Option.map(current, (projection) => ({
+        config: {
+          ...projection.config,
+          burnRate: event.payload.burnRate,
+        },
+        latestEvent: event,
+        source: "live",
+      }));
   }
 }
 
