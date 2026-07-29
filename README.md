@@ -16,35 +16,8 @@ eflob is a minimal web GUI for coding agents (currently Codex, Claude, Cursor, a
 > - Cursor: install [Cursor CLI](https://cursor.com/cli) and run `cursor-agent login`
 > - OpenCode: install [OpenCode](https://opencode.ai) and run `opencode auth login`
 
-### Run without installing
-
-```bash
-npx eflob@latest
-```
-
-Tip: Use `npx eflob@latest --help` for the full CLI reference.
-
-### Desktop app
-
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/yourorg/eflob/releases), or from your favorite package registry:
-
-#### Windows (`winget`)
-
-```bash
-winget install eflob.eflob
-```
-
-#### macOS (Homebrew)
-
-```bash
-brew install --cask eflob
-```
-
-#### Arch Linux (AUR)
-
-```bash
-yay -S eflob-bin
-```
+> [!NOTE]
+> eflob is not yet published to npm, winget, Homebrew, or the AUR, and there are no GitHub Releases. For now, run it from source (see [If you REALLY want to contribute still.... read this first](#if-you-really-want-to-contribute-still-read-this-first) below).
 
 ## Some notes
 
