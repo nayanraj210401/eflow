@@ -1725,6 +1725,10 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
       discard: true,
     }).pipe(Effect.asVoid);
 
+  // Codex only streams sparse rate-limit snapshots alongside turn events; it
+  // has no authoritative on-demand usage endpoint like Claude's `/usage`.
+  const refreshAccountUsage: CodexAdapterShape["refreshAccountUsage"] = () => Effect.void;
+
   yield* Effect.acquireRelease(Effect.void, () =>
     stopAll().pipe(
       Effect.andThen(Queue.shutdown(runtimeEventQueue)),
@@ -1749,6 +1753,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     listSessions,
     hasSession,
     stopAll,
+    refreshAccountUsage,
     get streamEvents() {
       return Stream.fromQueue(runtimeEventQueue);
     },

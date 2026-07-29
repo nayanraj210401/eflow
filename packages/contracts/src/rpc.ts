@@ -207,6 +207,7 @@ export const WS_METHODS = {
   serverProbe: "server.probe",
   serverGetConfig: "server.getConfig",
   serverRefreshProviders: "server.refreshProviders",
+  serverRefreshAccountUsage: "server.refreshAccountUsage",
   serverUpdateProvider: "server.updateProvider",
   serverUpdateServer: "server.updateServer",
   serverUpsertKeybinding: "server.upsertKeybinding",
@@ -274,6 +275,20 @@ export const WsServerRefreshProvidersRpc = Rpc.make(WS_METHODS.serverRefreshProv
     instanceId: Schema.optional(ProviderInstanceId),
   }),
   success: ServerProviderUpdatedPayload,
+  error: EnvironmentAuthorizationError,
+});
+
+/**
+ * Asks the server to query providers on demand for fresh account-level
+ * rate-limit usage (e.g. Claude's authoritative `/usage` endpoint), rather
+ * than waiting for the next incidental push. Best-effort: providers without
+ * an on-demand usage endpoint, or with no active session, no-op. Refreshed
+ * snapshots surface asynchronously through the existing `accountUsage`
+ * stream event, not this RPC's response.
+ */
+export const WsServerRefreshAccountUsageRpc = Rpc.make(WS_METHODS.serverRefreshAccountUsage, {
+  payload: Schema.Struct({}),
+  success: Schema.Struct({}),
   error: EnvironmentAuthorizationError,
 });
 
@@ -702,6 +717,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
+  WsServerRefreshAccountUsageRpc,
   WsServerUpdateProviderRpc,
   WsServerUpdateServerRpc,
   WsServerUpsertKeybindingRpc,

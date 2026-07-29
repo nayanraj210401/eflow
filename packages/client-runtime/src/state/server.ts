@@ -333,6 +333,14 @@ export function createServerEnvironmentAtoms<R, E>(
         key: ({ environmentId }) => environmentId,
       },
     }),
+    refreshAccountUsage: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:refresh-account-usage",
+      tag: WS_METHODS.serverRefreshAccountUsage,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
+    }),
     updateProvider: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:update-provider",
       tag: WS_METHODS.serverUpdateProvider,

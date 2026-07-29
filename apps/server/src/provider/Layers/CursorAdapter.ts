@@ -1150,6 +1150,8 @@ export function makeCursorAdapter(
     const stopAll: CursorAdapterShape["stopAll"] = () =>
       Effect.forEach(sessions.values(), stopSessionInternal, { discard: true });
 
+    const refreshAccountUsage: CursorAdapterShape["refreshAccountUsage"] = () => Effect.void;
+
     yield* Effect.addFinalizer(() =>
       Effect.forEach(sessions.values(), stopSessionInternal, { discard: true }).pipe(
         Effect.catch((cause) =>
@@ -1176,6 +1178,7 @@ export function makeCursorAdapter(
       listSessions,
       hasSession,
       stopAll,
+      refreshAccountUsage,
       streamEvents,
     } satisfies CursorAdapterShape;
   });

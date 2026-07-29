@@ -1697,6 +1697,8 @@ export function makeOpenCodeAdapter(
         );
       });
 
+    const refreshAccountUsage: OpenCodeAdapterShape["refreshAccountUsage"] = () => Effect.void;
+
     return {
       provider: PROVIDER,
       capabilities: {
@@ -1713,6 +1715,7 @@ export function makeOpenCodeAdapter(
       readThread,
       rollbackThread,
       stopAll,
+      refreshAccountUsage,
       get streamEvents() {
         return Stream.fromQueue(runtimeEvents);
       },

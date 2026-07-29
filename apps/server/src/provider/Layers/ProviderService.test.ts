@@ -199,6 +199,8 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
       }),
   );
 
+  const refreshAccountUsage = vi.fn((): Effect.Effect<void> => Effect.void);
+
   const adapter: ProviderAdapterShape<ProviderAdapterError> = {
     provider,
     capabilities: {
@@ -215,6 +217,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
     readThread,
     rollbackThread,
     stopAll,
+    refreshAccountUsage,
     get streamEvents() {
       return Stream.fromPubSub(runtimeEventPubSub);
     },
