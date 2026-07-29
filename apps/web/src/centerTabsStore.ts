@@ -250,7 +250,19 @@ export const useCenterTabsStore = create<CenterTabsStoreState>()(
             (current) => {
               const tabId = `thread:${threadTargetKey(target)}`;
               const tab: CenterTab = { id: tabId, kind: "thread", target };
-              return upsertTab(current, tab);
+              // Callers include a route effect that re-syncs the URL's
+              // thread into the store on every server-state update (not just
+              // real navigation) — see the doc comment on
+              // `_chat.$environmentId.$threadId.tsx`. Don't steal focus away
+              // from a sibling (file/diff/plan/preview) tab the user is
+              // already viewing for this same thread.
+              const activeTab = current.activeTabId ? current.tabs[current.activeTabId] : undefined;
+              const activeTabBelongsToThread =
+                activeTab !== undefined &&
+                threadTargetKey(
+                  activeTab.kind === "thread" ? activeTab.target : activeTab.threadRef,
+                ) === threadTargetKey(target);
+              return upsertTab(current, tab, !activeTabBelongsToThread);
             },
           ),
         })),
