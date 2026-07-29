@@ -58,6 +58,16 @@ export const GlassOpacity = Schema.Int.check(
 );
 export type GlassOpacity = typeof GlassOpacity.Type;
 export const DEFAULT_GLASS_OPACITY: GlassOpacity = 80;
+export const MIN_MAX_TABS_PER_THREAD = 1;
+export const MAX_MAX_TABS_PER_THREAD = 15;
+export const MaxTabsPerThread = Schema.Int.check(
+  Schema.isBetween({
+    minimum: MIN_MAX_TABS_PER_THREAD,
+    maximum: MAX_MAX_TABS_PER_THREAD,
+  }),
+);
+export type MaxTabsPerThread = typeof MaxTabsPerThread.Type;
+export const DEFAULT_MAX_TABS_PER_THREAD: MaxTabsPerThread = 6;
 
 export const ClientSettingsSchema = Schema.Struct({
   autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -95,6 +105,9 @@ export const ClientSettingsSchema = Schema.Struct({
       modelOrder: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
     }),
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  maxTabsPerThread: MaxTabsPerThread.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_MAX_TABS_PER_THREAD)),
+  ),
   sidebarAutoSettleAfterDays: Schema.NullOr(SidebarAutoSettleAfterDays).pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS)),
   ),
@@ -359,7 +372,7 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Server URL",
-        description: "Leave blank to let T3 Code spawn the server when needed.",
+        description: "Leave blank to let eflob spawn the server when needed.",
         providerSettingsForm: {
           placeholder: "http://127.0.0.1:4096",
           clearWhenEmpty: "omit",
@@ -595,6 +608,7 @@ export const ClientSettingsPatch = Schema.Struct({
       }),
     ),
   ),
+  maxTabsPerThread: Schema.optionalKey(MaxTabsPerThread),
   sidebarAutoSettleAfterDays: Schema.optionalKey(Schema.NullOr(SidebarAutoSettleAfterDays)),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
   sidebarProjectGroupingOverrides: Schema.optionalKey(

@@ -8,7 +8,7 @@ import {
   ProviderDriverKind,
   type OrchestrationEvent,
   type OrchestrationThread,
-} from "@t3tools/contracts";
+} from "@eflob/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
@@ -54,6 +54,7 @@ import { RuntimeReceiptBusTest } from "../src/orchestration/Layers/RuntimeReceip
 import { OrchestrationReactorLive } from "../src/orchestration/Layers/OrchestrationReactor.ts";
 import { ProviderCommandReactorLive } from "../src/orchestration/Layers/ProviderCommandReactor.ts";
 import { ProviderRuntimeIngestionLive } from "../src/orchestration/Layers/ProviderRuntimeIngestion.ts";
+import { AccountUsageLive } from "../src/provider/Layers/AccountUsage.ts";
 import {
   OrchestrationEngineService,
   type OrchestrationEngineShape,
@@ -309,6 +310,7 @@ export const makeOrchestrationIntegrationHarness = (
     const serverSettingsLayer = ServerSettingsService.layerTest();
     const runtimeIngestionLayer = ProviderRuntimeIngestionLive.pipe(
       Layer.provideMerge(runtimeServicesLayer),
+      Layer.provideMerge(AccountUsageLive),
       Layer.provideMerge(serverSettingsLayer),
     );
     const gitWorkflowLayer = Layer.mock(GitWorkflowService)({

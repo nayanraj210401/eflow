@@ -13,7 +13,7 @@ import {
   HostProcessEnvironment,
   HostProcessExecutablePath,
   HostProcessPlatform,
-} from "@t3tools/shared/hostProcess";
+} from "@eflob/shared/hostProcess";
 
 import * as ServerConfig from "../config.ts";
 import * as ProcessRunner from "../processRunner.ts";
@@ -111,13 +111,13 @@ it.layer(NodeServices.layer)("resolveServerSelfUpdateCapability", (it) => {
     const unitDir = path.join(home, ".config", "systemd", "user");
     yield* fs.makeDirectory(unitDir, { recursive: true });
     yield* fs.writeFileString(
-      path.join(unitDir, "t3code.service"),
+      path.join(unitDir, "eflob.service"),
       renderBootServiceUnit({
         nodePath: NODE_PATH,
         t3EntryPath: entryPath,
         baseDir: path.join(home, ".t3"),
         logPath: path.join(home, ".t3", "userdata", "logs", "boot-service.log"),
-        unitPath: path.join(unitDir, "t3code.service"),
+        unitPath: path.join(unitDir, "eflob.service"),
       }),
     );
   });
@@ -277,13 +277,13 @@ it.layer(NodeServices.layer)("ServerSelfUpdate.update", (it) => {
       const unitDir = path.join(home, ".config", "systemd", "user");
       yield* fs.makeDirectory(unitDir, { recursive: true });
       yield* fs.writeFileString(
-        path.join(unitDir, "t3code.service"),
+        path.join(unitDir, "eflob.service"),
         renderBootServiceUnit({
           nodePath: NODE_PATH,
           t3EntryPath: entryPath,
           baseDir,
           logPath: path.join(baseDir, "userdata", "logs", "boot-service.log"),
-          unitPath: path.join(unitDir, "t3code.service"),
+          unitPath: path.join(unitDir, "eflob.service"),
         }),
       );
     }
@@ -501,7 +501,7 @@ it.layer(NodeServices.layer)("ServerSelfUpdate.update", (it) => {
         "runtime/versions/0.0.29/node_modules/t3/dist/bin.mjs",
       );
       const unit = yield* context.fs.readFileString(
-        context.path.join(context.home, ".config", "systemd", "user", "t3code.service"),
+        context.path.join(context.home, ".config", "systemd", "user", "eflob.service"),
       );
       assert.include(unit, `ExecStart=${NODE_PATH} ${pinnedEntry} serve`);
       assert.deepEqual(
@@ -512,7 +512,7 @@ it.layer(NodeServices.layer)("ServerSelfUpdate.update", (it) => {
 
       assert.deepEqual(context.commands[3], {
         command: "systemctl",
-        args: ["--user", "restart", "t3code.service"],
+        args: ["--user", "restart", "eflob.service"],
       });
       assert.lengthOf(context.spawns, 0);
       // systemd replaces the process; the server must not exit itself.

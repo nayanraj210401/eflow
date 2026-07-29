@@ -3,15 +3,15 @@ import type {
   EnvironmentId,
   ResolvedKeybindingsConfig,
   ScopedThreadRef,
-} from "@t3tools/contracts";
-import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
+} from "@eflob/contracts";
+import { isWorkspaceImagePreviewPath } from "@eflob/shared/filePreview";
 import { VirtualizedFile, type SelectedLineRange } from "@pierre/diffs";
 import { Editor } from "@pierre/diffs/editor";
 import { EditorProvider, File, type FileOptions, Virtualizer } from "@pierre/diffs/react";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@eflob/client-runtime/state/runtime";
 import { ChevronRight, Code2, Eye, FolderTree, Globe2, LoaderCircle } from "lucide-react";
 import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -76,9 +76,20 @@ interface FilePreviewPanelProps {
   revealRequestId: number;
   onOpenFile: (relativePath: string) => void;
   onPendingChange: (relativePath: string, pending: boolean) => void;
+  /**
+   * VSCode-style tab layout redesign, Phase 3: when this panel is rendered as
+   * a central "file" tab's content (`CenterTabsHostRoot`), the workspace file
+   * tree already lives permanently in the right sidebar's top dock
+   * (`RightSidebarBrowsingPanel`) — showing this panel's own embedded
+   * `FileBrowserPanel` alongside it would duplicate the tree side-by-side
+   * with the file content (the reported "horizontal split" bug). Defaults to
+   * `true` to preserve the narrow-viewport sheet layout's behavior, where
+   * this panel's embedded explorer is still the only file-browsing UI.
+   */
+  showEmbeddedExplorer?: boolean;
 }
 
-const FILE_EXPLORER_STORAGE_KEY = "t3code.fileExplorerOpen";
+const FILE_EXPLORER_STORAGE_KEY = "eflob.fileExplorerOpen";
 const FILE_SAVE_DEBOUNCE_MS = 500;
 const FILE_LINK_REVEAL_ATTRIBUTE = "data-file-link-reveal";
 const FILE_LINK_REVEAL_UNSAFE_CSS = `
@@ -658,6 +669,7 @@ export default function FilePreviewPanel({
   revealRequestId,
   onOpenFile,
   onPendingChange,
+  showEmbeddedExplorer = true,
 }: FilePreviewPanelProps) {
   const { resolvedTheme } = useTheme();
   const wordWrap = useClientSettings((settings) => settings.wordWrap);
@@ -825,25 +837,27 @@ export default function FilePreviewPanel({
               <TooltipPopup>Open file in preview browser</TooltipPopup>
             </Tooltip>
           ) : null}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Toggle
-                  className="shrink-0"
-                  pressed={explorerOpen}
-                  onPressedChange={toggleExplorer}
-                  aria-label={explorerOpen ? "Hide file explorer" : "Show file explorer"}
-                  variant="ghost"
-                  size="sm"
-                >
-                  <FolderTree className="size-3.5" />
-                </Toggle>
-              }
-            />
-            <TooltipPopup>
-              {explorerOpen ? "Hide file explorer" : "Show file explorer"}
-            </TooltipPopup>
-          </Tooltip>
+          {showEmbeddedExplorer ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Toggle
+                    className="shrink-0"
+                    pressed={explorerOpen}
+                    onPressedChange={toggleExplorer}
+                    aria-label={explorerOpen ? "Hide file explorer" : "Show file explorer"}
+                    variant="ghost"
+                    size="sm"
+                  >
+                    <FolderTree className="size-3.5" />
+                  </Toggle>
+                }
+              />
+              <TooltipPopup>
+                {explorerOpen ? "Hide file explorer" : "Show file explorer"}
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
         </div>
       ) : null}
       {relativePath && file.data?.truncated ? (
@@ -927,7 +941,7 @@ export default function FilePreviewPanel({
             )
           ) : null}
         </div>
-        {explorerOpen || relativePath === null ? (
+        {showEmbeddedExplorer && (explorerOpen || relativePath === null) ? (
           <aside
             className={cn(
               "flex min-h-0 shrink-0 bg-background",

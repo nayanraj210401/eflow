@@ -14,6 +14,7 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
+import { TurnUsageSnapshot } from "./providerUsage.ts";
 
 const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString;
 const UnknownRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
@@ -365,6 +366,14 @@ const TurnCompletedPayload = Schema.Struct({
   usage: Schema.optional(Schema.Unknown),
   modelUsage: Schema.optional(UnknownRecordSchema),
   totalCostUsd: Schema.optional(Schema.Number),
+  /**
+   * Adapter-normalized view of `usage`/`modelUsage`/`totalCostUsd`. Added as a
+   * sibling rather than by tightening those fields: they are raw provider
+   * passthroughs, so giving them a struct schema would turn any upstream shape
+   * change into a decode failure that drops the entire `turn.completed` event
+   * and stalls the turn lifecycle. Adapters normalize defensively instead.
+   */
+  usageSummary: Schema.optional(TurnUsageSnapshot),
   errorMessage: Schema.optional(TrimmedNonEmptyStringSchema),
 });
 export type TurnCompletedPayload = typeof TurnCompletedPayload.Type;

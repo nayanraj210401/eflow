@@ -1,4 +1,4 @@
-import { EnvironmentHttpApi } from "@t3tools/contracts";
+import { EnvironmentHttpApi } from "@eflob/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
@@ -18,6 +18,7 @@ import * as ExternalLauncher from "./process/externalLauncher.ts";
 import { layerConfig as SqlitePersistenceLayerLive } from "./persistence/Layers/Sqlite.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
+import { AccountUsageLive } from "./provider/Layers/AccountUsage.ts";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory.ts";
 import * as ProviderSessionRuntime from "./persistence/ProviderSessionRuntime.ts";
 import { ProviderAdapterRegistryLive } from "./provider/Layers/ProviderAdapterRegistry.ts";
@@ -91,9 +92,9 @@ import {
   persistServerRuntimeState,
 } from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
-import * as NetService from "@t3tools/shared/Net";
-import * as RelayClient from "@t3tools/shared/relayClient";
-import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
+import * as NetService from "@eflob/shared/Net";
+import * as RelayClient from "@eflob/shared/relayClient";
+import { disableTailscaleServe, ensureTailscaleServe } from "@eflob/tailscale";
 
 // Effect's default preemptive shutdown waits 20s before finalizing request scopes.
 // T3's primary transport is long-lived WebSocket RPC, whose Effect scope finalizer
@@ -166,6 +167,9 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
   Layer.provideMerge(RuntimeReceiptBusLive),
+  // Shared, not private to the ingestion layer: the ingestion tap writes it and
+  // the WebSocket config stream reads it, so both need the same instance.
+  Layer.provideMerge(AccountUsageLive),
 );
 
 const ProviderSessionDirectoryLayerLive = ProviderSessionDirectoryLive.pipe(

@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
-import { EnvironmentId, type PersistedSavedEnvironmentRecord } from "@t3tools/contracts";
+import { EnvironmentId, type PersistedSavedEnvironmentRecord } from "@eflob/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -111,7 +111,7 @@ function makeLayer(
     runningUnderArm64Translation: false,
   }).pipe(
     Layer.provide(
-      Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({ T3CODE_HOME: baseDir })),
+      Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({ EFLOB_HOME: baseDir })),
     ),
   );
 

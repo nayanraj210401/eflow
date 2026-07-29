@@ -1,17 +1,17 @@
 import * as Schema from "effect/Schema";
 
-import { T3ProjectFile, T3_PROJECT_FILE_SCHEMA_URL } from "@t3tools/contracts";
+import { T3ProjectFile, T3_PROJECT_FILE_SCHEMA_URL } from "@eflob/contracts";
 
 import { fromLenientJson } from "./schemaJson.ts";
 
 /**
- * Codec between the raw `t3.json` file contents (lenient JSONC string) and the
+ * Codec between the raw `eflob.json` file contents (lenient JSONC string) and the
  * decoded {@link T3ProjectFile}.
  */
 export const T3ProjectFileFromJson = fromLenientJson(T3ProjectFile);
 
 /**
- * Build the publishable JSON Schema document for `t3.json` (draft 2020-12).
+ * Build the publishable JSON Schema document for `eflob.json` (draft 2020-12).
  *
  * Served from the marketing site at {@link T3_PROJECT_FILE_SCHEMA_URL} so
  * editors get LSP support via a `$schema` reference.

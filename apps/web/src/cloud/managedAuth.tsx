@@ -1,10 +1,10 @@
 import { useAuth } from "@clerk/react";
-import { ManagedRelay, setManagedRelaySession } from "@t3tools/client-runtime/relay";
+import { ManagedRelay, setManagedRelaySession } from "@eflob/client-runtime/relay";
 import {
   reportAtomCommandResult,
   settleAsyncResult,
   settlePromise,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@eflob/client-runtime/state/runtime";
 import * as Effect from "effect/Effect";
 import { useEffect, useRef, type ReactNode } from "react";
 

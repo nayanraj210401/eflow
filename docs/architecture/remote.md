@@ -1,6 +1,6 @@
 # Remote Architecture
 
-This document describes the target architecture for first-class remote environments in T3 Code.
+This document describes the target architecture for first-class remote environments in eflob.
 
 It is intentionally architecture-first. It does not define a complete implementation plan or user-facing rollout checklist. The goal is to establish the core model so remote support can be added without another broad rewrite.
 
@@ -8,7 +8,7 @@ It is intentionally architecture-first. It does not define a complete implementa
 
 - Treat remote environments as first-class product primitives, not special cases.
 - Support multiple ways to reach the same environment.
-- Keep the T3 server as the execution boundary.
+- Keep the eflob server as the execution boundary.
 - Let desktop, mobile, and web all share the same conceptual model.
 - Avoid introducing a local control plane unless product pressure proves it is necessary.
 
@@ -47,7 +47,7 @@ Remote support should preserve that boundary.
                 │ connects to one T3 server
                 │
 ┌───────────────▼──────────────────────────────┐
-│ Execution environment = one T3 server       │
+│ Execution environment = one eflob server       │
 │                                              │
 │ - environment identity                       │
 │ - provider state                             │
@@ -62,7 +62,7 @@ The important decision is that remoteness is expressed at the environment connec
 
 ### ExecutionEnvironment
 
-An `ExecutionEnvironment` is one running T3 server instance.
+An `ExecutionEnvironment` is one running eflob server instance.
 
 It is the unit that owns:
 
@@ -158,7 +158,7 @@ A hosted pairing request is a bootstrap URL for the static web app, not a transp
 Example:
 
 ```text
-https://app.t3.codes/pair?host=https://backend.example.com:3773#token=PAIRCODE
+https://app.eflob.codes/pair?host=https://backend.example.com:3773#token=PAIRCODE
 ```
 
 The hosted app reads the `host` parameter and pairing token, exchanges the token directly with that backend, then saves the resulting environment record in browser local storage.
@@ -282,17 +282,17 @@ Useful ideas to borrow from Zed:
 - reconnect-friendly launcher behavior
 - desktop-owned connection UX
 
-What should be different in T3:
+What should be different in eflob:
 
 - no custom stdio/socket proxy protocol between renderer and remote runtime
 - no attempt to make the remote runtime look like an editor transport
 - keep the final client-to-server connection as WebSocket
 
-The recommended T3 flow is:
+The recommended eflob flow is:
 
 1. Desktop connects over SSH.
-2. Desktop probes the remote machine and verifies T3 availability.
-3. Desktop launches or reuses a remote T3 server.
+2. Desktop probes the remote machine and verifies eflob availability.
+3. Desktop launches or reuses a remote eflob server.
 4. Desktop establishes local port forwarding.
 5. Renderer connects to the forwarded WebSocket endpoint as a normal environment.
 
@@ -356,7 +356,7 @@ That means:
 - tunnel exposure should not rely on obscurity
 - client-saved endpoints should carry enough auth metadata to reconnect safely
 
-T3 already supports a WebSocket auth token on the server. That should become a first-class part of environment access rather than remaining an incidental query parameter convention.
+eflob already supports a WebSocket auth token on the server. That should become a first-class part of environment access rather than remaining an incidental query parameter convention.
 
 For publicly reachable environments, authenticated access should be treated as required.
 

@@ -9,9 +9,9 @@ const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
-const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
+const isIosPersonalTeamBuild = repoEnv.EFLOB_IOS_PERSONAL_TEAM === "1";
 
-const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
+const personalTeamBundleIdentifier = repoEnv.EFLOB_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
 
 const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
@@ -22,7 +22,7 @@ if (
     !IOS_BUNDLE_IDENTIFIER_PATTERN.test(personalTeamBundleIdentifier))
 ) {
   throw new Error(
-    "T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID must be a reverse-DNS identifier such as com.example.t3code when T3CODE_IOS_PERSONAL_TEAM=1.",
+    "EFLOB_IOS_PERSONAL_TEAM_BUNDLE_ID must be a reverse-DNS identifier such as com.example.eflob when EFLOB_IOS_PERSONAL_TEAM=1.",
   );
 }
 
@@ -61,27 +61,27 @@ const RELEASE_ASSETS = {
 
 const VARIANT_CONFIG = {
   development: {
-    appName: "T3 Code Dev",
-    scheme: "t3code-dev",
-    iosBundleIdentifier: "com.t3tools.t3code.dev",
-    androidPackage: "com.t3tools.t3code.dev",
-    relyingParty: "clerk.t3.codes",
+    appName: "eflob Dev",
+    scheme: "eflob-dev",
+    iosBundleIdentifier: "com.eflob.eflob.dev",
+    androidPackage: "com.eflob.eflob.dev",
+    relyingParty: process.env.EFLOB_CLERK_DOMAIN ?? "TODO_CLERK_DOMAIN",
     assets: DEVELOPMENT_ASSETS,
   },
   preview: {
-    appName: "T3 Code Preview",
-    scheme: "t3code-preview",
-    iosBundleIdentifier: "com.t3tools.t3code.preview",
-    androidPackage: "com.t3tools.t3code.preview",
-    relyingParty: "clerk.t3.codes",
+    appName: "eflob Preview",
+    scheme: "eflob-preview",
+    iosBundleIdentifier: "com.eflob.eflob.preview",
+    androidPackage: "com.eflob.eflob.preview",
+    relyingParty: process.env.EFLOB_CLERK_DOMAIN ?? "TODO_CLERK_DOMAIN",
     assets: PREVIEW_ASSETS,
   },
   production: {
-    appName: "T3 Code",
-    scheme: "t3code",
-    iosBundleIdentifier: "com.t3tools.t3code",
-    androidPackage: "com.t3tools.t3code",
-    relyingParty: "clerk.t3.codes",
+    appName: "eflob",
+    scheme: "eflob",
+    iosBundleIdentifier: "com.eflob.eflob",
+    androidPackage: "com.eflob.eflob",
+    relyingParty: process.env.EFLOB_CLERK_DOMAIN ?? "TODO_CLERK_DOMAIN",
     assets: RELEASE_ASSETS,
   },
 } as const;
@@ -121,7 +121,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "AgentActivity",
         displayName: "Agent Activity",
-        description: "Shows the current state of active T3 Code agents.",
+        description: "Shows the current state of active eflob agents.",
         supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"],
       },
     ],
@@ -158,7 +158,7 @@ const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
 
 const config: ExpoConfig = {
   name: variant.appName,
-  slug: "t3-code",
+  slug: "eflob",
   platforms: ["ios", "android"],
   scheme: variant.scheme,
   version: "0.1.0",
@@ -182,10 +182,10 @@ const config: ExpoConfig = {
     icon: variant.assets.iosIcon,
     supportsTablet: true,
     bundleIdentifier: iosBundleIdentifier,
-    // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
+    // Pin code signing to the eflob team so non-interactive `expo run:ios`
     // does not fall back to a personal team (which cannot sign app groups,
     // Sign in with Apple, or push notification entitlements).
-    appleTeamId: "ARK85ZXQ4Z",
+    appleTeamId: process.env.EFLOB_APPLE_TEAM_ID ?? "TODO_APPLE_TEAM_ID",
     associatedDomains: [
       `applinks:${variant.relyingParty}`,
       `webcredentials:${variant.relyingParty}`,
@@ -195,7 +195,7 @@ const config: ExpoConfig = {
         NSAllowsArbitraryLoads: true,
       },
       NSLocalNetworkUsageDescription:
-        "Allow T3 Code to connect to T3 Code servers on your local network or tailnet.",
+        "Allow eflob to connect to eflob servers on your local network or tailnet.",
       ITSAppUsesNonExemptEncryption: false,
     },
   },
@@ -274,7 +274,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
+        cameraPermission: "Allow eflob to access your camera so you can scan pairing QR codes.",
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,
       },
@@ -324,7 +324,7 @@ const config: ExpoConfig = {
     appVariant: APP_VARIANT,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
-      url: repoEnv.T3CODE_RELAY_URL ?? null,
+      url: repoEnv.EFLOB_RELAY_URL ?? null,
     },
     clerk: {
       publishableKey: repoEnv.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? null,
@@ -345,10 +345,10 @@ const config: ExpoConfig = {
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
     eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      projectId: process.env.EFLOB_EAS_PROJECT_ID ?? "TODO_EAS_PROJECT_ID",
     },
   },
-  owner: "pingdotgg",
+  owner: process.env.EFLOB_EXPO_OWNER ?? "TODO_EXPO_OWNER",
 };
 
 export default config;

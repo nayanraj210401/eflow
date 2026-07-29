@@ -59,7 +59,7 @@ import {
   type TerminalMetadataStreamEvent,
   WS_METHODS,
   WsRpcGroup,
-} from "@t3tools/contracts";
+} from "@eflob/contracts";
 import { clamp } from "effect/Number";
 import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
@@ -76,6 +76,7 @@ import {
   observeRpcStream as instrumentRpcStream,
   observeRpcStreamEffect as instrumentRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
+import * as AccountUsageService from "./provider/Services/AccountUsage.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
@@ -115,7 +116,7 @@ import * as VcsProcess from "./vcs/VcsProcess.ts";
 import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
-import * as RelayClient from "@t3tools/shared/relayClient";
+import * as RelayClient from "@eflob/shared/relayClient";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -419,6 +420,7 @@ const makeWsRpcLayer = (
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
+      const accountUsage = yield* AccountUsageService.AccountUsage;
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const config = yield* ServerConfig.ServerConfig;
@@ -1097,6 +1099,7 @@ const makeWsRpcLayer = (
           settings,
           shellResumeCompletionMarker: true,
           threadResumeCompletionMarker: true,
+          accountUsage: yield* accountUsage.getSnapshots,
         };
       });
 
@@ -2011,6 +2014,13 @@ const makeWsRpcLayer = (
                   payload: { settings },
                 })),
               );
+              const accountUsageUpdates = accountUsage.streamChanges.pipe(
+                Stream.map((snapshots) => ({
+                  version: 1 as const,
+                  type: "accountUsage" as const,
+                  payload: { accountUsage: snapshots },
+                })),
+              );
 
               yield* providerRegistry
                 .refresh()
@@ -2018,7 +2028,7 @@ const makeWsRpcLayer = (
 
               const liveUpdates = Stream.merge(
                 keybindingsUpdates,
-                Stream.merge(providerStatuses, settingsUpdates),
+                Stream.merge(providerStatuses, Stream.merge(settingsUpdates, accountUsageUpdates)),
               );
 
               return Stream.concat(

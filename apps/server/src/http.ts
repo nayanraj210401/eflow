@@ -3,8 +3,8 @@ import {
   AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
-} from "@t3tools/contracts";
-import { decodeOtlpTraceRecords } from "@t3tools/shared/observability";
+} from "@eflob/contracts";
+import { decodeOtlpTraceRecords } from "@eflob/shared/observability";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -40,7 +40,7 @@ import { browserApiCorsAllowedHeaders, browserApiCorsAllowedMethods } from "./ht
 
 const OTLP_TRACES_PROXY_PATH = "/api/observability/v1/traces";
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "::1", "localhost"]);
-const DESKTOP_RENDERER_ORIGINS = ["t3code://app", "t3code-dev://app"];
+const DESKTOP_RENDERER_ORIGINS = ["eflob://app", "eflob-dev://app"];
 
 export const browserApiCorsLayer = Layer.unwrap(
   Effect.gen(function* () {

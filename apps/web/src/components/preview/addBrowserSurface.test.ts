@@ -1,4 +1,4 @@
-import type { PreviewOpenInput, PreviewSessionSnapshot, ScopedThreadRef } from "@t3tools/contracts";
+import type { PreviewOpenInput, PreviewSessionSnapshot, ScopedThreadRef } from "@eflob/contracts";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -48,5 +48,19 @@ describe("addBrowserSurface", () => {
         threadRef,
       ).surfaces.map((surface) => surface.id),
     ).toEqual(["browser:tab-1", "browser:tab-2"]);
+  });
+
+  it("calls onOpened with the new tab's snapshot once the surface is open", async () => {
+    const first = snapshot("tab-1");
+    const openPreview = vi.fn(async (_input: PreviewOpenInput) => AsyncResult.success(first));
+    const onOpened = vi.fn();
+
+    await addBrowserSurface({
+      threadRef,
+      openPreview: ({ input }) => openPreview(input),
+      onOpened,
+    });
+
+    expect(onOpened).toHaveBeenCalledWith(first);
   });
 });

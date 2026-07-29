@@ -28,7 +28,7 @@ import {
   type VcsStatusRemoteResult,
   VcsStatusResult,
   ModelSelection,
-} from "@t3tools/contracts";
+} from "@eflob/contracts";
 import {
   detectSourceControlProviderFromGitRemoteUrl,
   mergeGitStatusParts,
@@ -36,21 +36,21 @@ import {
   resolveAutoFeatureBranchName,
   sanitizeBranchFragment,
   sanitizeFeatureBranchName,
-} from "@t3tools/shared/git";
+} from "@eflob/shared/git";
 import {
   getChangeRequestTerminologyForKind,
   type ChangeRequestTerminology,
-} from "@t3tools/shared/sourceControl";
+} from "@eflob/shared/sourceControl";
 
-import { GitManagerError, GitPullRequestMaterializationError } from "@t3tools/contracts";
+import { GitManagerError, GitPullRequestMaterializationError } from "@eflob/contracts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import { extractBranchNameFromRemoteRef } from "./remoteRefs.ts";
 import * as ServerSettings from "../serverSettings.ts";
-import type { GitManagerServiceError } from "@t3tools/contracts";
+import type { GitManagerServiceError } from "@eflob/contracts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
-import type { ChangeRequest } from "@t3tools/contracts";
+import type { ChangeRequest } from "@eflob/contracts";
 
 export interface GitActionProgressReporter {
   readonly publish: (event: GitActionProgressEvent) => Effect.Effect<void, never>;
@@ -189,7 +189,7 @@ function resolvePullRequestWorktreeLocalBranchName(
 
   const sanitizedHeadBranch = sanitizeBranchFragment(pullRequest.headBranch).trim();
   const suffix = sanitizedHeadBranch.length > 0 ? sanitizedHeadBranch : "head";
-  return `t3code/pr-${pullRequest.number}/${suffix}`;
+  return `eflob/pr-${pullRequest.number}/${suffix}`;
 }
 
 function parseGitHubRepositoryNameWithOwnerFromRemoteUrl(url: string | null): string | null {
@@ -1545,7 +1545,7 @@ export const make = Effect.gen(function* () {
 
     const bodyFile = path.join(
       tempDir,
-      `t3code-pr-body-${process.pid}-${yield* randomUUIDv4(cwd)}.md`,
+      `eflob-pr-body-${process.pid}-${yield* randomUUIDv4(cwd)}.md`,
     );
     yield* fileSystem.writeFileString(bodyFile, generated.body).pipe(
       Effect.mapError(

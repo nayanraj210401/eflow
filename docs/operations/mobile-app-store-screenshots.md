@@ -21,8 +21,8 @@ The command:
 
 1. Creates three temporary T3 base directories and starts a local server for each on an available
    port.
-2. Creates T3 Code, React, and Linux Git repositories with recognizable favicons, feature branches,
-   and a deterministic T3 Code review diff.
+2. Creates eflob, React, and Linux Git repositories with recognizable favicons, feature branches,
+   and a deterministic eflob review diff.
 3. Seeds each server's migrated SQLite database with playful threads, messages, activities, and
    terminal history, then adds two persisted mobile-outbox tasks waiting to send.
 4. Starts an isolated Metro server, builds the selected native apps, and boots each device.
@@ -113,7 +113,7 @@ Reuse the native build and retain the disposable environment:
 
 Run Metro separately:
 
-    pnpm --filter @t3tools/mobile showcase
+    pnpm --filter @eflob/mobile showcase
     pnpm screenshots:mobile --skip-build --skip-metro --device iphone-6.9
 
 List the matrix and flags:
@@ -139,7 +139,7 @@ labels while the server still receives valid current data. The same deterministi
 ensemble serves iPhone, iPad, Android phone, and Android tablet captures; responsive differences
 come entirely from the production app layout.
 
-The Pending rows use the production offline outbox and point at the real T3 Code and React fixture
+The Pending rows use the production offline outbox and point at the real eflob and React fixture
 projects. Showcase coordination holds those two entries in the outbox for capture, just like a task
 currently open for editing, so reconnecting the seeded environments cannot deliver and remove them
 before the screenshot is taken.

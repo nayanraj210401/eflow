@@ -11,7 +11,7 @@ import {
   EnvironmentHttpConflictError,
   EnvironmentHttpInternalServerError,
   EnvironmentHttpUnauthorizedError,
-} from "@t3tools/contracts";
+} from "@eflob/contracts";
 import {
   RelayCloudEnvironmentHealthProofPayload,
   RelayCloudEnvironmentHealthRequest,
@@ -28,8 +28,8 @@ import {
   RelayEnvironmentLinkProofPayload,
   RelayLinkProofRequest,
   RelayManagedEndpointOrigin,
-} from "@t3tools/contracts/relay";
-import { withRelayClientTracing } from "@t3tools/shared/relayTracing";
+} from "@eflob/contracts/relay";
+import { withRelayClientTracing } from "@eflob/shared/relayTracing";
 import {
   normalizeRelayIssuer,
   RELAY_HEALTH_REQUEST_TYP,
@@ -39,8 +39,8 @@ import {
   RELAY_MINT_RESPONSE_TYP,
   signRelayJwt,
   verifyRelayJwt,
-} from "@t3tools/shared/relayJwt";
-import { isSecureRelayUrl } from "@t3tools/shared/relayUrl";
+} from "@eflob/shared/relayJwt";
+import { isSecureRelayUrl } from "@eflob/shared/relayUrl";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
 import * as Duration from "effect/Duration";
@@ -104,7 +104,7 @@ const requireRelayUrl = relayUrlConfig.pipe(
   Effect.mapError(
     () =>
       new EnvironmentHttpInternalServerError({
-        message: "T3CODE_RELAY_URL must be configured as a secure absolute HTTPS origin.",
+        message: "EFLOB_RELAY_URL must be configured as a secure absolute HTTPS origin.",
       }),
   ),
 );

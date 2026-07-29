@@ -1,6 +1,6 @@
-import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
-import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { type ServerLifecycleWelcomePayload } from "@eflob/contracts";
+import { scopedProjectKey, scopeProjectRef } from "@eflob/client-runtime/environment";
+import { squashAtomCommandFailure } from "@eflob/client-runtime/state/runtime";
 import {
   Outlet,
   createRootRoute,
@@ -11,6 +11,12 @@ import {
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { APP_BASE_NAME, APP_DISPLAY_NAME, APP_STAGE_LABEL } from "../branding";
+import { useCenterTabsStore } from "../centerTabsStore";
+import {
+  CENTER_TABS_MIGRATION_BOOTSTRAP_FLAG_KEY,
+  runCenterTabsMigrationBootstrapOnce,
+} from "../lib/centerTabsMigrationBootstrap";
+import { useRightPanelStore } from "../rightPanelStore";
 import { resolveServerBackedAppDisplayName } from "../branding.logic";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
@@ -47,7 +53,12 @@ import {
   primaryServerConfigEventAtom,
   primaryServerWelcomeAtom,
 } from "../state/server";
-import { readProject, setActiveEnvironmentId, useActiveEnvironmentId } from "../state/entities";
+import {
+  readProject,
+  readThreadShell,
+  setActiveEnvironmentId,
+  useActiveEnvironmentId,
+} from "../state/entities";
 import {
   createKeybindingsUpdateToastController,
   type KeybindingsUpdateToastController,
@@ -134,6 +145,7 @@ function RootRouteView() {
         <SshPasswordPromptDialog />
         <SlowRpcRequestToastCoordinator />
         <HostedStaticEnvironmentBootstrap />
+        <CenterTabsMigrationBootstrapEffect />
         {primaryEnvironmentAuthenticated ? <EventRouter /> : null}
         {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
         {appShell}
@@ -193,6 +205,45 @@ function HostedStaticEnvironmentBootstrap() {
 
     setActiveEnvironmentId(firstSavedEnvironment.environmentId);
   }, [activeEnvironmentId, environments]);
+
+  return null;
+}
+
+/**
+ * Runs once ever (per browser profile) on app start: migrates any
+ * `rightPanelStore`-persisted `file`/`plan`/`preview` surfaces into
+ * `centerTabsStore` so a user upgrading from before the VSCode-style tab
+ * layout doesn't silently lose their open items. See
+ * `../lib/centerTabsMigrationBootstrap.ts` for the pure logic and the
+ * design doc's "Risks / open questions" #3 for why this lives here rather
+ * than inside `rightPanelStore`'s `persist` `migrate` function.
+ */
+function CenterTabsMigrationBootstrapEffect() {
+  useEffect(() => {
+    runCenterTabsMigrationBootstrapOnce({
+      getFlag: () => {
+        if (typeof window === "undefined") return "skip";
+        return window.localStorage.getItem(CENTER_TABS_MIGRATION_BOOTSTRAP_FLAG_KEY);
+      },
+      setFlag: () => {
+        if (typeof window === "undefined") return;
+        window.localStorage.setItem(CENTER_TABS_MIGRATION_BOOTSTRAP_FLAG_KEY, "1");
+      },
+      getByThreadKey: () => useRightPanelStore.getState().byThreadKey,
+      resolveProjectRef: (threadRef) => {
+        const projectId = readThreadShell(threadRef)?.projectId;
+        return projectId ? scopeProjectRef(threadRef.environmentId, projectId) : null;
+      },
+      target: {
+        openFileTab: (projectRef, threadRef, relativePath, line) =>
+          useCenterTabsStore.getState().openFileTab(projectRef, threadRef, relativePath, line),
+        openPlanTab: (projectRef, threadRef) =>
+          useCenterTabsStore.getState().openPlanTab(projectRef, threadRef),
+        openPreviewTab: (projectRef, threadRef, previewTabId) =>
+          useCenterTabsStore.getState().openPreviewTab(projectRef, threadRef, previewTabId),
+      },
+    });
+  }, []);
 
   return null;
 }

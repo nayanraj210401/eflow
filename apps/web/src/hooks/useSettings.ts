@@ -16,14 +16,14 @@ import {
   type EnvironmentId,
   ServerSettings,
   type ServerSettingsPatch,
-} from "@t3tools/contracts";
+} from "@eflob/contracts";
 import {
   type ClientSettingsPatch,
   type ClientSettings,
   DEFAULT_CLIENT_SETTINGS,
   type UnifiedSettings,
-} from "@t3tools/contracts/settings";
-import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
+} from "@eflob/contracts/settings";
+import { safeErrorLogAttributes } from "@eflob/client-runtime/errors";
 import { ensureLocalApi } from "~/localApi";
 import * as Struct from "effect/Struct";
 import { primaryServerSettingsAtom, serverEnvironment } from "~/state/server";
@@ -53,6 +53,16 @@ function emitClientSettingsHydrationChange() {
 
 function getClientSettingsSnapshot(): ClientSettings {
   return clientSettingsSnapshot;
+}
+
+/**
+ * Synchronous, non-hook read of the current client settings snapshot — for
+ * plain (non-React) call sites like zustand store actions that can't call
+ * `useClientSettings`. Returns `DEFAULT_CLIENT_SETTINGS` before hydration
+ * completes, same as the hook's `getServerSnapshot` fallback.
+ */
+export function readClientSettings(): ClientSettings {
+  return getClientSettingsSnapshot();
 }
 
 function replaceClientSettingsSnapshot(settings: ClientSettings): void {
