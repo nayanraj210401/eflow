@@ -55,6 +55,7 @@ import { OrchestrationReactorLive } from "../src/orchestration/Layers/Orchestrat
 import { ProviderCommandReactorLive } from "../src/orchestration/Layers/ProviderCommandReactor.ts";
 import { ProviderRuntimeIngestionLive } from "../src/orchestration/Layers/ProviderRuntimeIngestion.ts";
 import { AccountUsageLive } from "../src/provider/Layers/AccountUsage.ts";
+import { BurnRateLive } from "../src/provider/Layers/BurnRate.ts";
 import {
   OrchestrationEngineService,
   type OrchestrationEngineShape,
@@ -310,7 +311,7 @@ export const makeOrchestrationIntegrationHarness = (
     const serverSettingsLayer = ServerSettingsService.layerTest();
     const runtimeIngestionLayer = ProviderRuntimeIngestionLive.pipe(
       Layer.provideMerge(runtimeServicesLayer),
-      Layer.provideMerge(AccountUsageLive),
+      Layer.provideMerge(BurnRateLive.pipe(Layer.provideMerge(AccountUsageLive))),
       Layer.provideMerge(serverSettingsLayer),
     );
     const gitWorkflowLayer = Layer.mock(GitWorkflowService)({

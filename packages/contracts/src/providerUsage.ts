@@ -101,3 +101,58 @@ export const TurnUsageSnapshot = Schema.Struct({
   models: Schema.Array(TurnModelUsage),
 });
 export type TurnUsageSnapshot = typeof TurnUsageSnapshot.Type;
+
+/**
+ * Burn-rate heuristics for the current session, scoped to the 5h quota window
+ * only (the window a session can actually exhaust mid-session — the 7d window
+ * changes too slowly for a live rate to be meaningful). Derived server-side
+ * from a trailing sample of `ProviderAccountUsageWindow.usedPercent` readings
+ * (the true quota signal reported by the provider) plus a trailing window of
+ * `TurnUsageSnapshot` activity across all threads (tokens/cost, for the "why"
+ * behind the rate) and live agent-concurrency gauges. Ephemeral — re-derived
+ * on an interval, never persisted.
+ */
+export const BurnRateLevel = Schema.Literals(["idle", "low", "medium", "high", "critical"]);
+export type BurnRateLevel = typeof BurnRateLevel.Type;
+
+export const BurnRateFiveHour = Schema.Struct({
+  /** Percentage points of the 5h quota consumed per minute, trailing 5-min sample. */
+  ratePerMinute: Schema.Number,
+  /** Minutes until the 5h quota is exhausted at the current rate; null if not exhausting. */
+  etaMinutes: Schema.NullOr(Schema.Number),
+  level: BurnRateLevel,
+});
+export type BurnRateFiveHour = typeof BurnRateFiveHour.Type;
+
+export const BurnRateModelThroughput = Schema.Struct({
+  model: TrimmedNonEmptyString,
+  tokensPerSecond: Schema.Number,
+  costPerMinuteUsd: Schema.Number,
+});
+export type BurnRateModelThroughput = typeof BurnRateModelThroughput.Type;
+
+export const BurnRateThroughput = Schema.Struct({
+  tokensPerSecond: Schema.Number,
+  costPerMinuteUsd: Schema.Number,
+  byModel: Schema.Array(BurnRateModelThroughput),
+});
+export type BurnRateThroughput = typeof BurnRateThroughput.Type;
+
+export const BurnRateAgents = Schema.Struct({
+  mainActive: NonNegativeInt,
+  subActive: NonNegativeInt,
+});
+export type BurnRateAgents = typeof BurnRateAgents.Type;
+
+export const BurnRateSnapshot = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  /** Null until a 5h window has been observed for this instance. */
+  fiveHour: Schema.NullOr(BurnRateFiveHour),
+  throughput: BurnRateThroughput,
+  agents: BurnRateAgents,
+  updatedAt: IsoDateTime,
+});
+export type BurnRateSnapshot = typeof BurnRateSnapshot.Type;
+
+export const BurnRateSnapshots = Schema.Array(BurnRateSnapshot);
+export type BurnRateSnapshots = typeof BurnRateSnapshots.Type;
