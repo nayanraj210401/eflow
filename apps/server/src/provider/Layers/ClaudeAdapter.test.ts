@@ -20,8 +20,8 @@ import {
   type RuntimeMode,
   ThreadId,
   ProviderInstanceId,
-} from "@t3tools/contracts";
-import { createModelSelection } from "@t3tools/shared/model";
+} from "@eflob/contracts";
+import { createModelSelection } from "@eflob/shared/model";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -972,6 +972,80 @@ describe("ClaudeAdapterLive", () => {
       Effect.provide(harness.layer),
     );
   });
+
+  it.effect(
+    "emits account.rate-limits.updated from the get_usage control response on turn completion",
+    () => {
+      const harness = makeHarness({ instanceId: ProviderInstanceId.make("claude_work") });
+      return Effect.gen(function* () {
+        const adapter = yield* ClaudeAdapter;
+
+        // The real SDK query object exposes this method; the test fake does
+        // not by default (mirroring an older SDK/CLI build where it's
+        // genuinely absent), so it's attached only for this test.
+        (
+          harness.query as unknown as {
+            usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET: () => Promise<unknown>;
+          }
+        ).usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET = () =>
+          Promise.resolve({
+            subscription_type: "pro",
+            rate_limits_available: true,
+            rate_limits: {
+              five_hour: { utilization: 33, resets_at: "2026-08-01T00:00:00.000Z" },
+            },
+          });
+
+        const runtimeEventsFiber = yield* Stream.takeUntil(
+          adapter.streamEvents,
+          (event) => event.type === "turn.completed",
+        ).pipe(Stream.runCollect, Effect.forkChild);
+
+        const session = yield* adapter.startSession({
+          threadId: THREAD_ID,
+          provider: ProviderDriverKind.make("claudeAgent"),
+          runtimeMode: "full-access",
+        });
+
+        yield* adapter.sendTurn({
+          threadId: session.threadId,
+          input: "hello",
+          attachments: [],
+        });
+
+        harness.query.emit({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          errors: [],
+          session_id: "sdk-session-usage",
+          uuid: "result-usage-1",
+        } as unknown as SDKMessage);
+
+        const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
+        const accountUsageEvent = runtimeEvents.find(
+          (event) => event.type === "account.rate-limits.updated",
+        );
+        assert.isDefined(accountUsageEvent);
+        if (accountUsageEvent?.type === "account.rate-limits.updated") {
+          assert.equal(String(accountUsageEvent.providerInstanceId), "claude_work");
+          assert.deepEqual(accountUsageEvent.payload.rateLimits, {
+            source: "claude-get-usage",
+            data: {
+              subscription_type: "pro",
+              rate_limits_available: true,
+              rate_limits: {
+                five_hour: { utilization: 33, resets_at: "2026-08-01T00:00:00.000Z" },
+              },
+            },
+          });
+        }
+      }).pipe(
+        Effect.provideService(Random.Random, makeDeterministicRandomService()),
+        Effect.provide(harness.layer),
+      );
+    },
+  );
 
   it.effect("steers a running turn instead of opening a new one on mid-turn sendTurn", () => {
     const harness = makeHarness();

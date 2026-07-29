@@ -35,7 +35,7 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@eflob/contracts";
 
 import {
   DEFAULT_INTERACTION_MODE,

@@ -1,10 +1,12 @@
 import {
   EnvironmentId,
+  ProviderDriverKind,
+  ProviderInstanceId,
   type ServerConfig,
   type ServerConfigStreamEvent,
   type ServerLifecycleWelcomePayload,
   WS_METHODS,
-} from "@t3tools/contracts";
+} from "@eflob/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -78,6 +80,37 @@ describe("server state projection", () => {
     const result = Option.getOrThrow(projected);
     expect(result.config.settings).toBe(settings);
     expect(result.latestEvent.type).toBe("settingsUpdated");
+  });
+
+  it("folds account usage updates into the projected config", () => {
+    const snapshot = applyServerConfigProjection(Option.none(), snapshotEvent(CONFIG));
+    const accountUsage = [
+      {
+        instanceId: ProviderInstanceId.make("claude_work"),
+        driver: ProviderDriverKind.make("claudeAgent"),
+        windows: [
+          {
+            key: "five_hour",
+            label: "5h",
+            usedPercent: 40,
+            observedAt: "2026-07-26T00:00:00.000Z",
+          },
+        ],
+        updatedAt: "2026-07-26T00:00:00.000Z",
+      },
+    ] satisfies ServerConfig["accountUsage"];
+
+    const projected = applyServerConfigProjection(snapshot, {
+      version: 1,
+      type: "accountUsage",
+      payload: { accountUsage },
+    });
+
+    const result = Option.getOrThrow(projected);
+    expect(result.config.accountUsage).toBe(accountUsage);
+    expect(result.latestEvent.type).toBe("accountUsage");
+    // Unrelated categories must survive the fold.
+    expect(result.config.providers).toBe(CONFIG.providers);
   });
 
   it("retains welcome when a ready event follows in the same stream chunk", () => {

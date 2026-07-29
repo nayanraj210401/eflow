@@ -19,6 +19,7 @@ import {
 import { EditorId } from "./editor.ts";
 import { ModelCapabilities } from "./model.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
+import { BurnRateSnapshots, ProviderAccountUsageSnapshots } from "./providerUsage.ts";
 import { ServerSettings } from "./settings.ts";
 
 const KeybindingsMalformedConfigIssue = Schema.Struct({
@@ -422,6 +423,18 @@ export const ServerConfig = Schema.Struct({
   shellResumeCompletionMarker: Schema.optionalKey(Schema.Boolean),
   /** Whether thread subscriptions can emit an opt-in catch-up completion marker. */
   threadResumeCompletionMarker: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Per-account rate-limit windows, keyed by provider instance. Ephemeral and
+   * re-derived from runtime events, so it is absent until a provider reports
+   * one — consumers must age out windows whose `resetsAt` has passed, since
+   * this field is replayed from the client's on-disk config cache.
+   */
+  accountUsage: Schema.optionalKey(ProviderAccountUsageSnapshots),
+  /**
+   * Burn-rate heuristics derived from `accountUsage`'s 5h window plus recent
+   * turn activity. Same replay/aging caveats as `accountUsage` — see there.
+   */
+  burnRate: Schema.optionalKey(BurnRateSnapshots),
 });
 export type ServerConfig = typeof ServerConfig.Type;
 
@@ -475,6 +488,16 @@ export const ServerConfigSettingsUpdatedPayload = Schema.Struct({
 });
 export type ServerConfigSettingsUpdatedPayload = typeof ServerConfigSettingsUpdatedPayload.Type;
 
+export const ServerConfigAccountUsagePayload = Schema.Struct({
+  accountUsage: ProviderAccountUsageSnapshots,
+});
+export type ServerConfigAccountUsagePayload = typeof ServerConfigAccountUsagePayload.Type;
+
+export const ServerConfigBurnRatePayload = Schema.Struct({
+  burnRate: BurnRateSnapshots,
+});
+export type ServerConfigBurnRatePayload = typeof ServerConfigBurnRatePayload.Type;
+
 export const ServerConfigStreamSnapshotEvent = Schema.Struct({
   version: Schema.Literal(1),
   type: Schema.Literal("snapshot"),
@@ -506,11 +529,27 @@ export const ServerConfigStreamSettingsUpdatedEvent = Schema.Struct({
 export type ServerConfigStreamSettingsUpdatedEvent =
   typeof ServerConfigStreamSettingsUpdatedEvent.Type;
 
+export const ServerConfigStreamAccountUsageEvent = Schema.Struct({
+  version: Schema.Literal(1),
+  type: Schema.Literal("accountUsage"),
+  payload: ServerConfigAccountUsagePayload,
+});
+export type ServerConfigStreamAccountUsageEvent = typeof ServerConfigStreamAccountUsageEvent.Type;
+
+export const ServerConfigStreamBurnRateEvent = Schema.Struct({
+  version: Schema.Literal(1),
+  type: Schema.Literal("burnRate"),
+  payload: ServerConfigBurnRatePayload,
+});
+export type ServerConfigStreamBurnRateEvent = typeof ServerConfigStreamBurnRateEvent.Type;
+
 export const ServerConfigStreamEvent = Schema.Union([
   ServerConfigStreamSnapshotEvent,
   ServerConfigStreamKeybindingsUpdatedEvent,
   ServerConfigStreamProviderStatusesEvent,
   ServerConfigStreamSettingsUpdatedEvent,
+  ServerConfigStreamAccountUsageEvent,
+  ServerConfigStreamBurnRateEvent,
 ]);
 export type ServerConfigStreamEvent = typeof ServerConfigStreamEvent.Type;
 

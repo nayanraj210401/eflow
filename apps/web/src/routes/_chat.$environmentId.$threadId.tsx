@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
-import ChatView from "../components/ChatView";
+import { scopeProjectRef } from "@eflob/client-runtime/environment";
+
 import { threadHasStarted } from "../components/ChatView.logic";
+import { useCenterTabsStore } from "../centerTabsStore";
 import { finalizePromotedDraftThreadByRef, useComposerDraftStore } from "../composerDraftStore";
 import { resolveThreadRouteRef, resolveThreadRouteRenderState } from "../threadRoutes";
-import { SidebarInset } from "~/components/ui/sidebar";
 import {
   useEnvironmentThreadRefs,
   useThreadDetail,
@@ -15,6 +16,15 @@ import {
 import { useEnvironmentQuery } from "../state/query";
 import { environmentShell } from "../state/shell";
 
+/**
+ * VSCode-style tab layout redesign, Phase 2: this route no longer renders
+ * `ChatView` directly — `CenterTabsHostRoot` (mounted once from `_chat.tsx`,
+ * above this route's `Outlet`) owns rendering every open thread tab now.
+ * This component's only remaining job is to "sync, don't render": keep the
+ * URL's thread in sync with `centerTabsStore` (opening/activating its tab)
+ * and redirect away when the thread turns out not to exist. The router still
+ * owns the URL (deep-linking, back/forward); it no longer owns the screen.
+ */
 function ChatThreadRouteView() {
   const navigate = useNavigate();
   const threadRef = Route.useParams({
@@ -68,19 +78,19 @@ function ChatThreadRouteView() {
     finalizePromotedDraftThreadByRef(threadRef);
   }, [draftThread, serverThreadStarted, threadRef]);
 
-  if (!threadRef || renderState !== "ready") {
-    return null;
-  }
+  useEffect(() => {
+    if (!threadRef || renderState !== "ready" || !serverThreadShell) {
+      return;
+    }
+    useCenterTabsStore
+      .getState()
+      .openThreadTab(scopeProjectRef(threadRef.environmentId, serverThreadShell.projectId), {
+        kind: "server",
+        threadRef,
+      });
+  }, [renderState, threadRef, serverThreadShell]);
 
-  return (
-    <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground md:h-dvh">
-      <ChatView
-        environmentId={threadRef.environmentId}
-        threadId={threadRef.threadId}
-        routeKind="server"
-      />
-    </SidebarInset>
-  );
+  return null;
 }
 
 export const Route = createFileRoute("/_chat/$environmentId/$threadId")({

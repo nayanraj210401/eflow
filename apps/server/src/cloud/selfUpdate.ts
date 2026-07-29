@@ -7,13 +7,13 @@ import {
   type ServerSelfUpdateCapability,
   type ServerSelfUpdateInput,
   type ServerSelfUpdateResult,
-} from "@t3tools/contracts";
+} from "@eflob/contracts";
 import {
   HostProcessArguments,
   HostProcessEnvironment,
   HostProcessExecutablePath,
   HostProcessPlatform,
-} from "@t3tools/shared/hostProcess";
+} from "@eflob/shared/hostProcess";
 import * as NodeChildProcess from "node:child_process";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -80,7 +80,7 @@ export function isPublishedCliEntry(entryPath: string): boolean {
 
 /**
  * The update path this process can offer, or null when only a manual
- * relaunch works. "desktop-managed" — the T3 Code desktop app spawned this
+ * relaunch works. "desktop-managed" — the eflob desktop app spawned this
  * backend and owns its version; only updating the app updates it.
  * "boot-service" — this is the systemd-supervised process from
  * bootService.ts: rewrite the unit and let systemd swap it. "respawn" — a
@@ -117,7 +117,7 @@ export const resolveServerSelfUpdateCapability = Effect.fn(
       Effect.orElseSucceed(() => false),
     );
     // INVOCATION_ID only proves that some systemd unit launched us. The
-    // explicit marker written into t3code.service identifies this unit as the
+    // explicit marker written into eflob.service identifies this unit as the
     // supervisor that will replace the current process when restarted.
     if (
       unitReferencesEntry &&
@@ -230,7 +230,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (option
   )(function* (input) {
     if (capability === "desktop-managed") {
       return yield* failWith(
-        "This server is managed by the T3 Code desktop app on its machine; update the desktop app to update it.",
+        "This server is managed by the eflob desktop app on its machine; update the desktop app to update it.",
       );
     }
     if (capability === null) {

@@ -1,4 +1,4 @@
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ThreadId } from "@eflob/contracts";
 
 interface TerminalLocationLike {
   readonly cwd: string;

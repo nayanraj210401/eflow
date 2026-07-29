@@ -12,7 +12,7 @@ import {
   HostProcessArguments,
   HostProcessExecutablePath,
   HostProcessPlatform,
-} from "@t3tools/shared/hostProcess";
+} from "@eflob/shared/hostProcess";
 
 import { reconcileService } from "../cli/service.ts";
 import * as ProcessRunner from "../processRunner.ts";
@@ -94,22 +94,22 @@ it("renders a systemd unit with absolute paths and append-mode logging", () => {
     t3EntryPath: "/home/theo/.t3/runtime/versions/0.0.27/node_modules/t3/dist/bin.mjs",
     baseDir: "/home/theo/.t3",
     logPath: "/home/theo/.t3/userdata/logs/boot-service.log",
-    unitPath: "/home/theo/.config/systemd/user/t3code.service",
+    unitPath: "/home/theo/.config/systemd/user/eflob.service",
   });
 
   assert.equal(
     unit,
     [
       "[Unit]",
-      "Description=T3 Code server",
+      "Description=eflob server",
       "StartLimitIntervalSec=300",
       "StartLimitBurst=5",
       "",
       "[Service]",
       "Type=simple",
       "WorkingDirectory=%h",
-      "Environment=T3CODE_HOME=/home/theo/.t3",
-      "Environment=T3_BOOT_SERVICE_UNIT=t3code.service",
+      "Environment=EFLOB_HOME=/home/theo/.t3",
+      "Environment=T3_BOOT_SERVICE_UNIT=eflob.service",
       "ExecStart=/usr/local/bin/node /home/theo/.t3/runtime/versions/0.0.27/node_modules/t3/dist/bin.mjs serve",
       "Restart=always",
       "RestartSec=5",
@@ -133,10 +133,10 @@ it("quotes systemd values containing spaces and escapes percent specifiers", () 
     t3EntryPath: "/home/me/T3 Data/bin.mjs",
     baseDir: "/home/me/T3 Data",
     logPath: "/home/me/100%logs/boot.log",
-    unitPath: "/home/me/.config/systemd/user/t3code.service",
+    unitPath: "/home/me/.config/systemd/user/eflob.service",
   });
   assert.include(unit, 'ExecStart="/home/me/my tools/node" "/home/me/T3 Data/bin.mjs" serve');
-  assert.include(unit, 'Environment=T3CODE_HOME="/home/me/T3 Data"');
+  assert.include(unit, 'Environment=EFLOB_HOME="/home/me/T3 Data"');
   // append: paths take the rest of the line literally (spaces are fine,
   // quoting is not), but % still goes through specifier expansion.
   assert.include(unit, "StandardOutput=append:/home/me/100%%logs/boot.log");
@@ -218,18 +218,18 @@ it.layer(NodeServices.layer)("BootService", (it) => {
         commands.map((entry) => [entry.command, ...entry.args].join(" ")),
         [
           "systemctl --user daemon-reload",
-          "systemctl --user enable t3code.service",
+          "systemctl --user enable eflob.service",
           // restart (not enable --now) so repairing a stale unit replaces a
           // running process instead of leaving the old one until reboot.
-          "systemctl --user restart t3code.service",
+          "systemctl --user restart eflob.service",
           "loginctl enable-linger",
         ],
       );
 
-      const unitPath = path.join(dirs.home, ".config", "systemd", "user", "t3code.service");
+      const unitPath = path.join(dirs.home, ".config", "systemd", "user", "eflob.service");
       const unit = yield* fs.readFileString(unitPath);
       assert.include(unit, `ExecStart=/usr/local/bin/node ${dirs.stableEntry} serve`);
-      assert.include(unit, `Environment=T3CODE_HOME=${dirs.baseDir}`);
+      assert.include(unit, `Environment=EFLOB_HOME=${dirs.baseDir}`);
 
       const status = yield* service.status;
       assert.isTrue(status.supported);
@@ -354,7 +354,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
       const unitDir = path.join(dirs.home, ".config", "systemd", "user");
       yield* fs.makeDirectory(unitDir, { recursive: true });
       yield* fs.writeFileString(
-        path.join(unitDir, "t3code.service"),
+        path.join(unitDir, "eflob.service"),
         "[Service]\nExecStart=/old/node /old/t3 serve\n",
       );
 
@@ -406,7 +406,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
       assert.isTrue(isUnsupportedError(error));
       assert.lengthOf(commands, 0);
       assert.isFalse(
-        yield* fs.exists(path.join(dirs.home, ".config", "systemd", "user", "t3code.service")),
+        yield* fs.exists(path.join(dirs.home, ".config", "systemd", "user", "eflob.service")),
       );
 
       const status = yield* service.status;
@@ -434,14 +434,14 @@ it.layer(NodeServices.layer)("BootService", (it) => {
       // A leftover unit would make status report "installed" even though
       // linger never happened.
       assert.isFalse(
-        yield* fs.exists(path.join(dirs.home, ".config", "systemd", "user", "t3code.service")),
+        yield* fs.exists(path.join(dirs.home, ".config", "systemd", "user", "eflob.service")),
       );
       const status = yield* service.status;
       assert.isFalse(status.installed);
       assert.isTrue(
         commands.some(
           ({ command, args }) =>
-            command === "systemctl" && args.join(" ") === "--user disable --now t3code.service",
+            command === "systemctl" && args.join(" ") === "--user disable --now eflob.service",
         ),
       );
     }),
@@ -462,7 +462,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
       );
       yield* initialService.install;
 
-      const unitPath = path.join(dirs.home, ".config", "systemd", "user", "t3code.service");
+      const unitPath = path.join(dirs.home, ".config", "systemd", "user", "eflob.service");
       const previousUnit = yield* fs.readFileString(unitPath);
       const replacementEntry = path.join(dirs.home, "replacement-bin.mjs");
       yield* fs.writeFileString(replacementEntry, "#!/usr/bin/env node\n");
@@ -484,7 +484,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
       assert.isTrue(
         repairCommands.some(
           ({ command, args }) =>
-            command === "systemctl" && args.join(" ") === "--user restart t3code.service",
+            command === "systemctl" && args.join(" ") === "--user restart eflob.service",
         ),
       );
     }),
@@ -525,7 +525,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
 
       assert.isTrue(isCommandError(error));
       assert.isTrue(
-        yield* fs.exists(path.join(dirs.home, ".config", "systemd", "user", "t3code.service")),
+        yield* fs.exists(path.join(dirs.home, ".config", "systemd", "user", "eflob.service")),
       );
     }),
   );

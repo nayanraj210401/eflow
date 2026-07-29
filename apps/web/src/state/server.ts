@@ -1,15 +1,17 @@
 import {
+  type BurnRateSnapshots,
   DEFAULT_SERVER_SETTINGS,
   type EditorId,
+  type ProviderAccountUsageSnapshots,
   type ServerConfig,
   type ServerConfigStreamEvent,
   type ServerLifecycleWelcomePayload,
   type ServerProvider,
   type ServerSettings,
-} from "@t3tools/contracts";
-import { createServerEnvironmentAtoms } from "@t3tools/client-runtime/state/server";
-import { createEnvironmentServerConfigsAtom } from "@t3tools/client-runtime/state/shell";
-import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
+} from "@eflob/contracts";
+import { createServerEnvironmentAtoms } from "@eflob/client-runtime/state/server";
+import { createEnvironmentServerConfigsAtom } from "@eflob/client-runtime/state/shell";
+import { DEFAULT_RESOLVED_KEYBINDINGS } from "@eflob/shared/keybindings";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
@@ -34,6 +36,8 @@ interface PrimaryServerState {
 
 const EMPTY_AVAILABLE_EDITORS: ReadonlyArray<EditorId> = [];
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
+const EMPTY_ACCOUNT_USAGE: ProviderAccountUsageSnapshots = [];
+const EMPTY_BURN_RATE: BurnRateSnapshots = [];
 const EMPTY_PRIMARY_SERVER_STATE: PrimaryServerState = {
   config: null,
   latestEvent: null,
@@ -79,6 +83,15 @@ export const primaryServerProvidersAtom = Atom.make(
   (get): ReadonlyArray<ServerProvider> =>
     get(primaryServerConfigAtom)?.providers ?? EMPTY_SERVER_PROVIDERS,
 ).pipe(Atom.withLabel("web-primary-server-providers"));
+
+export const primaryServerAccountUsageAtom = Atom.make(
+  (get): ProviderAccountUsageSnapshots =>
+    get(primaryServerConfigAtom)?.accountUsage ?? EMPTY_ACCOUNT_USAGE,
+).pipe(Atom.withLabel("web-primary-server-account-usage"));
+
+export const primaryServerBurnRateAtom = Atom.make(
+  (get): BurnRateSnapshots => get(primaryServerConfigAtom)?.burnRate ?? EMPTY_BURN_RATE,
+).pipe(Atom.withLabel("web-primary-server-burn-rate"));
 
 export const primaryServerKeybindingsAtom = Atom.make(
   (get): ServerConfig["keybindings"] =>

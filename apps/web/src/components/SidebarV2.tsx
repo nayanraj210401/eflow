@@ -5,14 +5,14 @@ import {
   effectiveSettled,
   effectiveSnoozed,
   threadWokeAt,
-} from "@t3tools/client-runtime/state/thread-settled";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+} from "@eflob/client-runtime/state/thread-settled";
+import type { EnvironmentThreadShell } from "@eflob/client-runtime/state/models";
 import {
   scopeProjectRef,
   scopeThreadRef,
   scopedThreadKey,
-} from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef, SidebarProjectGroupingMode } from "@t3tools/contracts";
+} from "@eflob/client-runtime/environment";
+import type { ScopedThreadRef, SidebarProjectGroupingMode } from "@eflob/contracts";
 import {
   AlarmClockIcon,
   AlarmClockOffIcon,
@@ -52,7 +52,7 @@ import {
   isAtomCommandInterrupted,
   settlePromise,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@eflob/client-runtime/state/runtime";
 import { isElectron } from "../env";
 import {
   resolveShortcutCommand,
@@ -65,7 +65,7 @@ import {
 import { useShortcutModifierState } from "../shortcutModifierState";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isModelPickerOpen } from "../modelPickerVisibility";
-import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
+import { selectThreadHasTerminalGroups, useTerminalDockStore } from "../terminalDockStore";
 import { isMacPlatform } from "~/lib/utils";
 import { useOpenPrLink } from "../lib/openPullRequestLink";
 import { readLocalApi } from "../localApi";
@@ -2116,10 +2116,8 @@ export default function SidebarV2() {
 
   // Thread jump (cmd+1..9) and prev/next traversal reuse the same commands as
   // v1 — the keybinding layer is shared, only the ordered list differs.
-  const routeTerminalOpen = useTerminalUiStateStore((state) =>
-    routeThreadRef
-      ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
-      : false,
+  const routeTerminalOpen = useTerminalDockStore((state) =>
+    routeThreadRef ? selectThreadHasTerminalGroups(state.byThreadKey, routeThreadRef) : false,
   );
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {

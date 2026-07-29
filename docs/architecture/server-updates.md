@@ -1,6 +1,6 @@
 # Server Update Architecture
 
-T3 Code can update a connected server to the exact version of the client that detected version
+eflob can update a connected server to the exact version of the client that detected version
 drift. This path exists primarily for remote environments, where the user may not have a terminal
 open on the server machine.
 
@@ -34,7 +34,7 @@ The server resolves its capability once at startup and publishes it in the envir
 
 | Advertised value  | Process shape                                                                                 | Client behavior                                                       |
 | ----------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `boot-service`    | Linux server running under the T3-managed systemd user service                                | Call the update RPC; the service unit is replaced and restarted.      |
+| `boot-service`    | Linux server running under the eflob-managed systemd user service                                | Call the update RPC; the service unit is replaced and restarted.      |
 | `respawn`         | Published npm CLI running in the foreground on macOS or Linux                                 | Call the update RPC; the process hands off to a detached replacement. |
 | `desktop-managed` | Backend supervised by the desktop app                                                         | Tell the user to update the desktop app on the server machine.        |
 | absent            | Older server, development checkout, Windows foreground process, or an unrecognized supervisor | Offer the exact manual relaunch command.                              |

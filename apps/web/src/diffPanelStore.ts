@@ -1,17 +1,26 @@
-import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef, TurnId } from "@t3tools/contracts";
+import { scopedThreadKey } from "@eflob/client-runtime/environment";
+import type { ScopedThreadRef, TurnId } from "@eflob/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
 
 export type DiffPanelSelection =
-  | { kind: "branch"; baseRef: string | null }
-  | { kind: "unstaged" }
+  | { kind: "branch"; baseRef: string | null; filePath: string | null; revealRequestId: number }
+  | { kind: "unstaged"; filePath: string | null; revealRequestId: number }
   | { kind: "turn"; turnId: TurnId; filePath: string | null; revealRequestId: number };
 
-const DEFAULT_SELECTION: DiffPanelSelection = { kind: "branch", baseRef: null };
-const DEFAULT_WORKING_TREE_SELECTION: DiffPanelSelection = { kind: "unstaged" };
+const DEFAULT_SELECTION: DiffPanelSelection = {
+  kind: "branch",
+  baseRef: null,
+  filePath: null,
+  revealRequestId: 0,
+};
+const DEFAULT_WORKING_TREE_SELECTION: DiffPanelSelection = {
+  kind: "unstaged",
+  filePath: null,
+  revealRequestId: 0,
+};
 
 interface DiffPanelStoreState {
   byThreadKey: Record<string, DiffPanelSelection>;
@@ -19,6 +28,15 @@ interface DiffPanelStoreState {
   selectGitScope: (ref: ScopedThreadRef, scope: "branch" | "unstaged") => void;
   selectBranchBaseRef: (ref: ScopedThreadRef, baseRef: string | null) => void;
   selectTurn: (ref: ScopedThreadRef, turnId: TurnId, filePath?: string) => void;
+  /**
+   * Reveals `filePath` within whichever diff scope (`branch`/`unstaged`/`turn`)
+   * is currently selected for `ref`, bumping `revealRequestId` so
+   * `DiffPanel.tsx`'s scroll-to-file effect re-fires even if the same path is
+   * revealed twice in a row. Used by `DiffFileListPanel` (mounted in the right
+   * sidebar's diff-browsing area) to scroll the central diff tab to a row
+   * clicked there, regardless of which diff scope is active.
+   */
+  revealFile: (ref: ScopedThreadRef, filePath: string) => void;
   reconcileTurnSelection: (ref: ScopedThreadRef, availableTurnIds: ReadonlyArray<TurnId>) => void;
   removeThread: (ref: ScopedThreadRef) => void;
 }
@@ -46,8 +64,8 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
               ...state.byThreadKey,
               [threadKey]:
                 scope === "branch"
-                  ? { kind: "branch", baseRef: previousBaseRef }
-                  : { kind: "unstaged" },
+                  ? { kind: "branch", baseRef: previousBaseRef, filePath: null, revealRequestId: 0 }
+                  : { kind: "unstaged", filePath: null, revealRequestId: 0 },
             },
             branchBaseRefByThreadKey:
               previous?.kind === "branch"
@@ -59,10 +77,16 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
         set((state) => {
           const threadKey = scopedThreadKey(ref);
           const normalizedBaseRef = normalizeBaseRef(baseRef);
+          const previous = state.byThreadKey[threadKey];
           return {
             byThreadKey: {
               ...state.byThreadKey,
-              [threadKey]: { kind: "branch", baseRef: normalizedBaseRef },
+              [threadKey]: {
+                kind: "branch",
+                baseRef: normalizedBaseRef,
+                filePath: previous?.kind === "branch" ? previous.filePath : null,
+                revealRequestId: previous?.kind === "branch" ? previous.revealRequestId : 0,
+              },
             },
             branchBaseRefByThreadKey: {
               ...state.branchBaseRefByThreadKey,
@@ -82,6 +106,22 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
                 turnId,
                 filePath: filePath?.trim() || null,
                 revealRequestId: previous?.kind === "turn" ? previous.revealRequestId + 1 : 1,
+              },
+            },
+          };
+        }),
+      revealFile: (ref, filePath) =>
+        set((state) => {
+          const threadKey = scopedThreadKey(ref);
+          const trimmedFilePath = filePath.trim() || null;
+          const previous = state.byThreadKey[threadKey] ?? DEFAULT_SELECTION;
+          return {
+            byThreadKey: {
+              ...state.byThreadKey,
+              [threadKey]: {
+                ...previous,
+                filePath: trimmedFilePath,
+                revealRequestId: previous.revealRequestId + 1,
               },
             },
           };
@@ -118,7 +158,7 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
         }),
     }),
     {
-      name: "t3code:diff-panel-state:v1",
+      name: "eflob:diff-panel-state:v1",
       version: 1,
       storage: createJSONStorage(() =>
         resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
