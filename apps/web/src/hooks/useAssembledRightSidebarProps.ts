@@ -42,8 +42,8 @@ import {
   findSidebarProposedPlan,
   isLatestTurnSettled,
 } from "../session-logic";
-import { useMediaQuery } from "./useMediaQuery";
-import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
+import { RIGHT_PANEL_INLINE_LAYOUT_MAX_WIDTH } from "../rightPanelLayout";
+import { useAvailableContentWidth } from "./useAvailableContentWidth";
 import {
   selectActiveRightPanel,
   selectThreadRightPanelState,
@@ -144,7 +144,8 @@ export function useAssembledRightSidebarProps(
     ? `${activeProject.environmentId}:${activeProject.workspaceRoot}`
     : null;
 
-  const shouldUsePlanSidebarSheet = useMediaQuery(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY);
+  const shouldUsePlanSidebarSheet =
+    useAvailableContentWidth() <= RIGHT_PANEL_INLINE_LAYOUT_MAX_WIDTH;
 
   const activeRightPanelKind = useRightPanelStore((state) =>
     selectActiveRightPanel(state.byThreadKey, activeThreadRef),
