@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
+import { PNG } from "pngjs";
 
-import { encodePngIco, readPngDimensions } from "./icon-export.ts";
+import { applyRoundedCornerMask, encodePngIco, readPngDimensions } from "./icon-export.ts";
 
 const pngHeader = (width: number, height: number) => {
   const contents = Buffer.alloc(24);
@@ -43,5 +44,22 @@ describe("icon export", () => {
         ]),
       /provided more than once/,
     );
+  });
+
+  it("cuts transparent rounded corners without touching the center", () => {
+    const size = 100;
+    const opaque = new PNG({ width: size, height: size });
+    opaque.data.fill(255);
+    const masked = PNG.sync.read(applyRoundedCornerMask(PNG.sync.write(opaque), 0.2));
+
+    const alphaAt = (x: number, y: number) => masked.data[(size * y + x) * 4 + 3];
+
+    assert.equal(alphaAt(0, 0), 0);
+    assert.equal(alphaAt(size - 1, 0), 0);
+    assert.equal(alphaAt(0, size - 1), 0);
+    assert.equal(alphaAt(size - 1, size - 1), 0);
+    assert.equal(alphaAt(Math.floor(size / 2), Math.floor(size / 2)), 255);
+    assert.equal(alphaAt(Math.floor(size / 2), 0), 255);
+    assert.equal(alphaAt(0, Math.floor(size / 2)), 255);
   });
 });

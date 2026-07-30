@@ -1,3 +1,5 @@
+import { PNG } from "pngjs";
+
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 export const WINDOWS_ICON_SIZES = [16, 24, 32, 48, 64, 128, 256] as const;
@@ -69,4 +71,37 @@ export function encodePngIco(images: ReadonlyArray<PngIconImage>): Buffer {
   });
 
   return Buffer.concat([header, ...images.map((image) => image.contents)]);
+}
+
+/**
+ * Cuts transparent rounded corners into a full-bleed square PNG.
+ *
+ * iOS Springboard masks native app icons itself, but Safari does not mask
+ * `apple-touch-icon` images added to the home screen — the rounding must be
+ * baked into the pixels, or the icon shows up as a sharp-cornered square.
+ */
+export function applyRoundedCornerMask(pngBuffer: Buffer, cornerRadiusRatio: number): Buffer {
+  const png = PNG.sync.read(pngBuffer);
+  const { width, height } = png;
+  const radius = cornerRadiusRatio * Math.min(width, height);
+
+  for (let y = 0; y < height; y++) {
+    const inCornerRow = y < radius || y >= height - radius;
+    if (!inCornerRow) continue;
+    const cy = y < radius ? radius : height - radius;
+
+    for (let x = 0; x < width; x++) {
+      const inCornerColumn = x < radius || x >= width - radius;
+      if (!inCornerColumn) continue;
+      const cx = x < radius ? radius : width - radius;
+
+      const distance = Math.hypot(x - cx, y - cy);
+      if (distance > radius) {
+        const alphaIndex = (width * y + x) * 4 + 3;
+        png.data[alphaIndex] = 0;
+      }
+    }
+  }
+
+  return PNG.sync.write(png);
 }
