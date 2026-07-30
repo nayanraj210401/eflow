@@ -14,9 +14,16 @@ import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import { BRAND_ASSET_PATHS, DEVELOPMENT_PUBLIC_ICON_OVERRIDES } from "./lib/brand-assets.ts";
-import { encodePngIco, readPngDimensions, WINDOWS_ICON_SIZES } from "./lib/icon-export.ts";
+import {
+  applyRoundedCornerMask,
+  encodePngIco,
+  readPngDimensions,
+  WINDOWS_ICON_SIZES,
+} from "./lib/icon-export.ts";
 
 const DESIGN_GENERATION = 26;
+/** Approximates iOS's superellipse app-icon mask for web home-screen icons. */
+const APPLE_TOUCH_ICON_CORNER_RADIUS_RATIO = 0.22;
 const ICON_COMPOSER_EXECUTABLE_PARTS = [
   "Contents",
   "Applications",
@@ -599,7 +606,10 @@ const renderVariant = Effect.fn("iconExport.renderVariant")(function* (
   return new Map<string, Buffer>([
     [variant.outputs.ios, ios],
     [variant.outputs.universal, ios],
-    [variant.outputs.appleTouch, yield* render("iOS", 180)],
+    [
+      variant.outputs.appleTouch,
+      applyRoundedCornerMask(yield* render("iOS", 180), APPLE_TOUCH_ICON_CORNER_RADIUS_RATIO),
+    ],
     [variant.outputs.favicon16, yield* render("iOS", 16)],
     [variant.outputs.favicon32, yield* render("iOS", 32)],
     [variant.outputs.faviconIco, ico],
