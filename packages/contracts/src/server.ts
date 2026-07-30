@@ -331,6 +331,11 @@ export const ServerProcessDiagnosticsResult = Schema.Struct({
 });
 export type ServerProcessDiagnosticsResult = typeof ServerProcessDiagnosticsResult.Type;
 
+export const ServerHeadroomCliStatus = Schema.Struct({
+  installed: Schema.Boolean,
+});
+export type ServerHeadroomCliStatus = typeof ServerHeadroomCliStatus.Type;
+
 export const ServerProcessResourceHistoryInput = Schema.Struct({
   windowMs: NonNegativeInt,
   bucketMs: NonNegativeInt,

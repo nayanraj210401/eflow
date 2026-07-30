@@ -413,6 +413,10 @@ export const DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL = Duration.seconds(30);
 export const ServerSettings = Schema.Struct({
   enableAssistantStreaming: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   enableProviderUpdateChecks: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Beta: when true and the `headroom` CLI is installed, Claude Code
+  // sessions are routed through a local Headroom proxy (ANTHROPIC_BASE_URL)
+  // for tool-output/context compression. See HeadroomProxy.ts.
+  headroomWrapEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   automaticGitFetchInterval: Schema.DurationFromMillis.pipe(
     Schema.withDecodingDefault(
       Effect.succeed(Duration.toMillis(DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL)),
@@ -553,6 +557,7 @@ export const ServerSettingsPatch = Schema.Struct({
   // Server settings
   enableAssistantStreaming: Schema.optionalKey(Schema.Boolean),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
+  headroomWrapEnabled: Schema.optionalKey(Schema.Boolean),
   automaticGitFetchInterval: Schema.optionalKey(Schema.DurationFromMillis),
   defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),

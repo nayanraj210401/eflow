@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 
 import { MAX_MAX_TABS_PER_THREAD, MIN_MAX_TABS_PER_THREAD } from "@eflob/contracts/settings";
 
-import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
+import { usePrimaryEnvironment } from "../../state/environments";
+import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
+import {
+  useClientSettings,
+  usePrimarySettings,
+  useUpdateClientSettings,
+  useUpdatePrimarySettings,
+} from "../../hooks/useSettings";
 import { Input } from "../ui/input";
 import { Slider } from "../ui/slider";
 import { Switch } from "../ui/switch";
@@ -93,9 +101,37 @@ export function BetaSettingsPanel() {
   const maxTabsPerThread = useClientSettings((settings) => settings.maxTabsPerThread);
   const updateSettings = useUpdateClientSettings();
 
+  const headroomWrapEnabled = usePrimarySettings((settings) => settings.headroomWrapEnabled);
+  const updatePrimarySettings = useUpdatePrimarySettings();
+  const environmentId = usePrimaryEnvironment()?.environmentId ?? null;
+  const { data: headroomCliStatus } = useEnvironmentQuery(
+    environmentId === null
+      ? null
+      : serverEnvironment.headroomCliStatus({ environmentId, input: {} }),
+  );
+  const headroomInstalled = headroomCliStatus?.installed ?? false;
+
   return (
     <SettingsPageContainer>
       <SettingsSection title="Beta features">
+        <SettingsRow
+          title="Headroom context compression"
+          description={
+            headroomInstalled
+              ? "Routes Claude Code sessions through a local Headroom proxy to compress large tool outputs before they reach the model. Requires the headroom CLI, already detected on this machine."
+              : "Routes Claude Code sessions through a local Headroom proxy to compress large tool outputs before they reach the model. Install the headroom CLI (https://github.com/chopratejas/headroom) to enable this."
+          }
+          control={
+            <Switch
+              checked={headroomInstalled && headroomWrapEnabled}
+              disabled={!headroomInstalled}
+              onCheckedChange={(checked) =>
+                updatePrimarySettings({ headroomWrapEnabled: Boolean(checked) })
+              }
+              aria-label="Enable Headroom context compression"
+            />
+          }
+        />
         <SettingsRow
           title="Max tabs per thread"
           description="How many file/diff/plan/preview tabs can stay open for a single thread at once. Opening past the limit closes the least-recently-used one."
