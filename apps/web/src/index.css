@@ -122,6 +122,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --animate-status-pulse: status-pulse 2s infinite;
   --animate-status-ping: status-ping 2s infinite;
   --animate-sidebar-working-text: sidebar-working-text 3.4s infinite;
+  /* Burn-rate charge-up bar: speed/duration overridden per-instance via
+     inline animationDuration, keyed off BurnRateLevel. */
+  --animate-charge-shimmer: charge-shimmer 2s ease-in-out infinite;
+  --animate-charge-pulse: charge-pulse 2s ease-in-out infinite;
   --font-sans:
     "DM Sans Variable", "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
     sans-serif;
@@ -216,6 +220,24 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     }
     100% {
       opacity: 1;
+    }
+  }
+  @keyframes charge-shimmer {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(250%);
+    }
+  }
+  @keyframes charge-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in oklab, var(--charge-glow-color, transparent) 0%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 8px 1px
+        color-mix(in oklab, var(--charge-glow-color, transparent) 60%, transparent);
     }
   }
 }
