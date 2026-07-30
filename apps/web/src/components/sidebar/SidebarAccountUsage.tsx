@@ -3,6 +3,7 @@ import type { BurnRateLevel, BurnRateSnapshot, ProviderDriverKind } from "@eflob
 import { isAtomCommandInterrupted } from "@eflob/client-runtime/state/runtime";
 import { LoaderIcon, RefreshCwIcon } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 
 import { cn } from "../../lib/utils";
 import { usePrimaryEnvironment } from "../../state/environments";
@@ -45,8 +46,13 @@ const TONE_BAR_COLORS: Record<AccountUsageTone, string> = {
   exhausted: "var(--color-destructive)",
 };
 
-function UsageBar(props: { row: AccountUsageRow; compact?: boolean }) {
-  const { row, compact } = props;
+function UsageBar(props: {
+  row: AccountUsageRow;
+  compact?: boolean;
+  burnLevel?: BurnRateLevel | null;
+}) {
+  const { row, compact, burnLevel } = props;
+  const chargeMs = burnLevel ? BURN_RATE_LEVEL_ANIMATION_MS[burnLevel] : undefined;
   return (
     <div
       className={cn("w-full overflow-hidden rounded-full bg-muted/60", compact ? "h-0.5" : "h-1")}
@@ -57,9 +63,28 @@ function UsageBar(props: { row: AccountUsageRow; compact?: boolean }) {
       aria-label={`${row.providerLabel} ${row.windowLabel} usage`}
     >
       <div
-        className="h-full rounded-full transition-[width,background-color] duration-500 ease-out motion-reduce:transition-none"
-        style={{ width: `${row.usedPercent}%`, backgroundColor: TONE_BAR_COLORS[row.tone] }}
-      />
+        className={cn(
+          "relative h-full overflow-hidden rounded-full transition-[width,background-color] duration-500 ease-out motion-reduce:transition-none",
+          chargeMs !== undefined && "animate-charge-pulse motion-reduce:animate-none",
+        )}
+        style={{
+          width: `${row.usedPercent}%`,
+          backgroundColor: TONE_BAR_COLORS[row.tone],
+          ...(chargeMs !== undefined
+            ? ({
+                animationDuration: `${chargeMs}ms`,
+                "--charge-glow-color": BURN_RATE_LEVEL_COLOR[burnLevel as BurnRateLevel],
+              } as CSSProperties)
+            : null),
+        }}
+      >
+        {chargeMs !== undefined ? (
+          <div
+            className="pointer-events-none absolute inset-0 -translate-x-full animate-charge-shimmer bg-gradient-to-r from-transparent via-white/40 to-transparent motion-reduce:hidden"
+            style={{ animationDuration: `${chargeMs}ms` }}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -83,6 +108,19 @@ const BURN_RATE_LEVEL_COLOR: Record<BurnRateLevel, string> = {
   medium: "var(--color-warning)",
   high: "color-mix(in oklab, var(--color-warning) 50%, var(--color-destructive) 50%)",
   critical: "var(--color-destructive)",
+};
+
+/**
+ * Charge-up animation duration per burn-rate level — faster burn, faster
+ * pulse/shimmer, like a video-game energy bar charging under load. `idle` is
+ * intentionally omitted: an always-animating bar on a quiet account would cry
+ * wolf.
+ */
+const BURN_RATE_LEVEL_ANIMATION_MS: Partial<Record<BurnRateLevel, number>> = {
+  low: 3200,
+  medium: 2200,
+  high: 1400,
+  critical: 800,
 };
 
 function BurnRateBadge(props: { level: BurnRateLevel }) {
@@ -156,7 +194,7 @@ function UsageDetailRow(props: {
           {Math.round(row.usedPercent)}%
         </span>
       </div>
-      <UsageBar row={row} />
+      <UsageBar row={row} burnLevel={burnRate?.fiveHour?.level ?? null} />
       {resetsIn ? (
         <div className="text-[10px] leading-3 text-muted-foreground/50">{resetsIn}</div>
       ) : null}
@@ -243,11 +281,15 @@ export const SidebarAccountUsage = memo(function SidebarAccountUsage() {
                 : "gap-1.5 px-2 py-1.5 hover:bg-sidebar-row-hover",
             )}
           >
-            {visibleRows.map((row) =>
-              isCollapsed ? (
+            {visibleRows.map((row) => {
+              const burnLevel =
+                row.windowLabel === "5h"
+                  ? (burnRateByInstance.get(row.instanceId)?.fiveHour?.level ?? null)
+                  : null;
+              return isCollapsed ? (
                 <div key={row.id} className="flex w-full items-center gap-1">
                   <ProviderIcon driver={row.driver} className="size-2.5 shrink-0" />
-                  <UsageBar row={row} compact />
+                  <UsageBar row={row} compact burnLevel={burnLevel} />
                 </div>
               ) : (
                 <div key={row.id} className="flex w-full items-center gap-2">
@@ -255,13 +297,13 @@ export const SidebarAccountUsage = memo(function SidebarAccountUsage() {
                   <span className="w-5 shrink-0 text-left text-[10px] font-medium tabular-nums text-sidebar-muted-foreground/70">
                     {row.windowLabel}
                   </span>
-                  <UsageBar row={row} />
+                  <UsageBar row={row} burnLevel={burnLevel} />
                   <span className="w-8 shrink-0 text-right text-[10px] tabular-nums text-sidebar-muted-foreground/70">
                     {Math.round(row.usedPercent)}%
                   </span>
                 </div>
-              ),
-            )}
+              );
+            })}
           </button>
         }
       />
