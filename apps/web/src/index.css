@@ -1578,3 +1578,124 @@ label:has(> select#reasoning-effort) select {
   opacity: 0.3;
   pointer-events: none;
 }
+
+/* Theme presets: curated color palettes layered on top of the base light/dark
+   surfaces. Selected independently of the light/dark toggle via
+   data-theme-variant on the document element (see useTheme.ts). Specificity
+   (:root + class + attribute) intentionally exceeds the base palette rules
+   above so these always win regardless of source order. */
+:root[data-theme-variant="nord"] {
+  --background: #eceff4;
+  --app-chrome-background: var(--background);
+  --foreground: #2e3440;
+  --card: #ffffff;
+  --card-foreground: #2e3440;
+  --popover: #ffffff;
+  --popover-foreground: #2e3440;
+  --primary: #5e81ac;
+  --primary-foreground: #ffffff;
+  --secondary: #e5e9f0;
+  --secondary-foreground: #2e3440;
+  --muted: #e5e9f0;
+  --muted-foreground: #4c566a;
+  --accent: #d8dee9;
+  --accent-foreground: #2e3440;
+  --border: #d8dee9;
+  --input: #d8dee9;
+  --ring: #5e81ac;
+  --sidebar: #e5e9f0;
+  --sidebar-foreground: #2e3440;
+  --sidebar-muted-foreground: #4c566a;
+  --sidebar-control-surface: #d8dee9;
+  --sidebar-row-hover: #eceff4;
+  --sidebar-row-active: #ffffff;
+  --sidebar-row-selected: #ffffff;
+  --sidebar-border: #d8dee9;
+}
+
+:root.dark[data-theme-variant="nord"] {
+  --background: #2e3440;
+  --app-chrome-background: var(--background);
+  --foreground: #eceff4;
+  --card: #3b4252;
+  --card-foreground: #eceff4;
+  --popover: #3b4252;
+  --popover-foreground: #eceff4;
+  --primary: #88c0d0;
+  --primary-foreground: #2e3440;
+  --secondary: #434c5e;
+  --secondary-foreground: #eceff4;
+  --muted: #434c5e;
+  --muted-foreground: #d8dee9;
+  --accent: #4c566a;
+  --accent-foreground: #eceff4;
+  --border: #434c5e;
+  --input: #4c566a;
+  --ring: #88c0d0;
+  --sidebar: #3b4252;
+  --sidebar-foreground: #eceff4;
+  --sidebar-muted-foreground: #d8dee9;
+  --sidebar-control-surface: #434c5e;
+  --sidebar-row-hover: #434c5e;
+  --sidebar-row-active: #4c566a;
+  --sidebar-row-selected: #4c566a;
+  --sidebar-border: #434c5e;
+}
+
+:root[data-theme-variant="rose-pine"] {
+  --background: #faf4ed;
+  --app-chrome-background: var(--background);
+  --foreground: #575279;
+  --card: #fffaf3;
+  --card-foreground: #575279;
+  --popover: #fffaf3;
+  --popover-foreground: #575279;
+  --primary: #286983;
+  --primary-foreground: #faf4ed;
+  --secondary: #f2e9e1;
+  --secondary-foreground: #575279;
+  --muted: #f2e9e1;
+  --muted-foreground: #797593;
+  --accent: #f4ede8;
+  --accent-foreground: #575279;
+  --border: #dfdad9;
+  --input: #dfdad9;
+  --ring: #286983;
+  --sidebar: #fffaf3;
+  --sidebar-foreground: #575279;
+  --sidebar-muted-foreground: #797593;
+  --sidebar-control-surface: #f2e9e1;
+  --sidebar-row-hover: #f4ede8;
+  --sidebar-row-active: #faf4ed;
+  --sidebar-row-selected: #faf4ed;
+  --sidebar-border: #dfdad9;
+}
+
+:root.dark[data-theme-variant="rose-pine"] {
+  --background: #191724;
+  --app-chrome-background: var(--background);
+  --foreground: #e0def4;
+  --card: #1f1d2e;
+  --card-foreground: #e0def4;
+  --popover: #1f1d2e;
+  --popover-foreground: #e0def4;
+  --primary: #9ccfd8;
+  --primary-foreground: #191724;
+  --secondary: #26233a;
+  --secondary-foreground: #e0def4;
+  --muted: #26233a;
+  --muted-foreground: #908caa;
+  --accent: #403d52;
+  --accent-foreground: #e0def4;
+  --border: #403d52;
+  --input: #403d52;
+  --ring: #9ccfd8;
+  --sidebar: #1f1d2e;
+  --sidebar-foreground: #e0def4;
+  --sidebar-muted-foreground: #908caa;
+  --sidebar-control-surface: #26233a;
+  --sidebar-row-hover: #26233a;
+  --sidebar-row-active: #403d52;
+  --sidebar-row-selected: #403d52;
+  --sidebar-border: #403d52;
+}

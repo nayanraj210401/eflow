@@ -5,18 +5,24 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 
 const ThemePreference = Schema.Literals(["light", "dark", "system"]);
 type Theme = typeof ThemePreference.Type;
+const ThemeVariantPreference = Schema.Literals(["default", "nord", "rose-pine"]);
+export type ThemeVariant = typeof ThemeVariantPreference.Type;
 type ThemeSnapshot = {
   theme: Theme;
   systemDark: boolean;
+  variant: ThemeVariant;
 };
 
 type DesktopThemeBridge = Pick<DesktopBridge, "setTheme">;
 
 const STORAGE_KEY = "eflob:theme";
+const VARIANT_STORAGE_KEY = "eflob:theme-variant";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
+const DEFAULT_VARIANT: ThemeVariant = "default";
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
   theme: "system",
   systemDark: false,
+  variant: DEFAULT_VARIANT,
 };
 const THEME_COLOR_META_NAME = "theme-color";
 const DYNAMIC_THEME_COLOR_SELECTOR = `meta[name="${THEME_COLOR_META_NAME}"][data-dynamic-theme-color="true"]`;
@@ -56,6 +62,7 @@ let lastSnapshot: ThemeSnapshot | null = null;
 let lastDesktopTheme: Theme | null = null;
 let lastAppliedTheme: ThemeSnapshot | null = null;
 let themeStorageReadFailure: ThemeStorageError | null = null;
+let themeVariantStorageReadFailure: ThemeStorageError | null = null;
 
 function emitChange() {
   for (const listener of listeners) listener();
@@ -124,6 +131,60 @@ function getStored(): Theme {
   }
 }
 
+export function readThemeVariantPreference(): ThemeVariant {
+  if (typeof window === "undefined") return DEFAULT_VARIANT;
+  let raw: string | null;
+  try {
+    raw = window.localStorage.getItem(VARIANT_STORAGE_KEY);
+  } catch (cause) {
+    throw new ThemeStorageError({
+      operation: "read",
+      storageKey: VARIANT_STORAGE_KEY,
+      cause,
+    });
+  }
+  if (raw === "default" || raw === "nord" || raw === "rose-pine") return raw;
+  return DEFAULT_VARIANT;
+}
+
+export function writeThemeVariantPreference(variant: ThemeVariant): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(VARIANT_STORAGE_KEY, variant);
+    themeVariantStorageReadFailure = null;
+  } catch (cause) {
+    throw new ThemeStorageError({
+      operation: "write",
+      storageKey: VARIANT_STORAGE_KEY,
+      cause,
+    });
+  }
+}
+
+function getStoredVariant(): ThemeVariant {
+  if (themeVariantStorageReadFailure !== null) {
+    return DEFAULT_VARIANT;
+  }
+  try {
+    return readThemeVariantPreference();
+  } catch (cause) {
+    const error = isThemeStorageError(cause)
+      ? cause
+      : new ThemeStorageError({
+          operation: "read",
+          storageKey: VARIANT_STORAGE_KEY,
+          cause,
+        });
+    themeVariantStorageReadFailure = error;
+    console.error(error.message, {
+      operation: error.operation,
+      storageKey: error.storageKey,
+      ...safeErrorLogAttributes(error),
+    });
+    return DEFAULT_VARIANT;
+  }
+}
+
 function ensureThemeColorMetaTag(): HTMLMetaElement {
   let element = document.querySelector<HTMLMetaElement>(DYNAMIC_THEME_COLOR_SELECTOR);
   if (element) {
@@ -173,10 +234,14 @@ export function syncBrowserChromeTheme() {
   ensureThemeColorMetaTag().setAttribute("content", backgroundColor);
 }
 
-function applyTheme(theme: Theme, suppressTransitions = false) {
+function applyTheme(theme: Theme, variant: ThemeVariant, suppressTransitions = false) {
   if (typeof document === "undefined" || typeof window === "undefined") return;
   const systemDark = theme === "system" ? getSystemDark() : false;
-  if (lastAppliedTheme?.theme === theme && lastAppliedTheme.systemDark === systemDark) {
+  if (
+    lastAppliedTheme?.theme === theme &&
+    lastAppliedTheme.systemDark === systemDark &&
+    lastAppliedTheme.variant === variant
+  ) {
     syncDesktopTheme(theme);
     return;
   }
@@ -186,7 +251,12 @@ function applyTheme(theme: Theme, suppressTransitions = false) {
   }
   const isDark = theme === "dark" || (theme === "system" && systemDark);
   document.documentElement.classList.toggle("dark", isDark);
-  lastAppliedTheme = { theme, systemDark };
+  if (variant === DEFAULT_VARIANT) {
+    document.documentElement.removeAttribute("data-theme-variant");
+  } else {
+    document.documentElement.setAttribute("data-theme-variant", variant);
+  }
+  lastAppliedTheme = { theme, systemDark, variant };
   syncBrowserChromeTheme();
   syncDesktopTheme(theme);
   if (suppressTransitions) {
@@ -234,19 +304,25 @@ export function syncDesktopTheme(theme: Theme) {
 
 // Apply immediately on module load to prevent flash
 if (typeof document !== "undefined" && typeof window !== "undefined") {
-  applyTheme(getStored());
+  applyTheme(getStored(), getStoredVariant());
 }
 
 function getSnapshot(): ThemeSnapshot {
   if (typeof window === "undefined") return DEFAULT_THEME_SNAPSHOT;
   const theme = getStored();
   const systemDark = theme === "system" ? getSystemDark() : false;
+  const variant = getStoredVariant();
 
-  if (lastSnapshot && lastSnapshot.theme === theme && lastSnapshot.systemDark === systemDark) {
+  if (
+    lastSnapshot &&
+    lastSnapshot.theme === theme &&
+    lastSnapshot.systemDark === systemDark &&
+    lastSnapshot.variant === variant
+  ) {
     return lastSnapshot;
   }
 
-  lastSnapshot = { theme, systemDark };
+  lastSnapshot = { theme, systemDark, variant };
   return lastSnapshot;
 }
 
@@ -261,7 +337,7 @@ function subscribe(listener: () => void): () => void {
   // Listen for system preference changes
   const mq = typeof window.matchMedia === "function" ? window.matchMedia(MEDIA_QUERY) : null;
   const handleChange = () => {
-    if (getStored() === "system") applyTheme("system", true);
+    if (getStored() === "system") applyTheme("system", getStoredVariant(), true);
     emitChange();
   };
   mq?.addEventListener("change", handleChange);
@@ -270,7 +346,11 @@ function subscribe(listener: () => void): () => void {
   const handleStorage = (e: StorageEvent) => {
     if (e.key === STORAGE_KEY) {
       themeStorageReadFailure = null;
-      applyTheme(getStored(), true);
+      applyTheme(getStored(), getStoredVariant(), true);
+      emitChange();
+    } else if (e.key === VARIANT_STORAGE_KEY) {
+      themeVariantStorageReadFailure = null;
+      applyTheme(getStored(), getStoredVariant(), true);
       emitChange();
     }
   };
@@ -286,6 +366,7 @@ function subscribe(listener: () => void): () => void {
 export function useTheme() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const theme = snapshot.theme;
+  const variant = snapshot.variant;
 
   const resolvedTheme: "light" | "dark" =
     theme === "system" ? (snapshot.systemDark ? "dark" : "light") : theme;
@@ -311,14 +392,37 @@ export function useTheme() {
       });
       return;
     }
-    applyTheme(next, true);
+    applyTheme(next, getStoredVariant(), true);
+    emitChange();
+  }, []);
+
+  const setVariant = useCallback((next: ThemeVariant) => {
+    if (typeof window === "undefined") return;
+    try {
+      writeThemeVariantPreference(next);
+    } catch (cause) {
+      const error = isThemeStorageError(cause)
+        ? cause
+        : new ThemeStorageError({
+            operation: "write",
+            storageKey: VARIANT_STORAGE_KEY,
+            cause,
+          });
+      console.error(error.message, {
+        operation: error.operation,
+        storageKey: error.storageKey,
+        ...safeErrorLogAttributes(error),
+      });
+      return;
+    }
+    applyTheme(getStored(), next, true);
     emitChange();
   }, []);
 
   // Keep DOM in sync on mount/change
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    applyTheme(theme, variant);
+  }, [theme, variant]);
 
-  return { theme, setTheme, resolvedTheme } as const;
+  return { theme, setTheme, resolvedTheme, variant, setVariant } as const;
 }
