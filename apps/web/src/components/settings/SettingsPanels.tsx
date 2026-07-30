@@ -114,6 +114,24 @@ const THEME_OPTIONS = [
   },
 ] as const;
 
+const THEME_VARIANT_OPTIONS = [
+  {
+    value: "default",
+    label: "Default",
+    swatch: { light: "oklch(0.488 0.217 264)", dark: "oklch(0.588 0.217 264)" },
+  },
+  {
+    value: "nord",
+    label: "Nord",
+    swatch: { light: "#5e81ac", dark: "#88c0d0" },
+  },
+  {
+    value: "rose-pine",
+    label: "Rosé Pine",
+    swatch: { light: "#286983", dark: "#9ccfd8" },
+  },
+] as const;
+
 const TIMESTAMP_FORMAT_LABELS = {
   locale: "System default",
   "12-hour": "12-hour",
@@ -388,7 +406,7 @@ function AboutVersionSection() {
 }
 
 export function useSettingsRestore(onRestored?: () => void) {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, variant, setVariant } = useTheme();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
 
@@ -400,6 +418,7 @@ export function useSettingsRestore(onRestored?: () => void) {
   const changedSettingLabels = useMemo(
     () => [
       ...(theme !== "system" ? ["Theme"] : []),
+      ...(variant !== "default" ? ["Color preset"] : []),
       ...(settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity ? ["Glass opacity"] : []),
       ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
         ? ["Time format"]
@@ -465,6 +484,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.timestampFormat,
       settings.wordWrap,
       theme,
+      variant,
     ],
   );
 
@@ -479,6 +499,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     if (!confirmed) return;
 
     setTheme("system");
+    setVariant("default");
     updateSettings({
       timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
       wordWrap: DEFAULT_UNIFIED_SETTINGS.wordWrap,
@@ -498,7 +519,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
     });
     onRestored?.();
-  }, [changedSettingLabels, onRestored, setTheme, updateSettings]);
+  }, [changedSettingLabels, onRestored, setTheme, setVariant, updateSettings]);
 
   return {
     changedSettingLabels,
@@ -507,7 +528,7 @@ export function useSettingsRestore(onRestored?: () => void) {
 }
 
 export function AppearanceSettingsPanel() {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme, variant, setVariant } = useTheme();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const glassOpacityRatio =
@@ -546,6 +567,49 @@ export function AppearanceSettingsPanel() {
                 {THEME_OPTIONS.map((option) => (
                   <SelectItem hideIndicator key={option.value} value={option.value}>
                     {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Color preset"
+          description="Pick a curated color palette to use within the light and dark theme."
+          resetAction={
+            variant !== "default" ? (
+              <SettingResetButton label="color preset" onClick={() => setVariant("default")} />
+            ) : null
+          }
+          control={
+            <Select
+              value={variant}
+              onValueChange={(value) => {
+                if (value === "default" || value === "nord" || value === "rose-pine") {
+                  setVariant(value);
+                }
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-40" aria-label="Color preset">
+                <SelectValue>
+                  {THEME_VARIANT_OPTIONS.find((option) => option.value === variant)?.label ??
+                    "Default"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {THEME_VARIANT_OPTIONS.map((option) => (
+                  <SelectItem hideIndicator key={option.value} value={option.value}>
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="size-3 shrink-0 rounded-full"
+                        style={{
+                          backgroundColor: option.swatch[resolvedTheme],
+                        }}
+                      />
+                      {option.label}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectPopup>

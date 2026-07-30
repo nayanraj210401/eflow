@@ -84,6 +84,8 @@ describe("theme failure handling", () => {
     vi.stubGlobal("document", {
       documentElement: {
         classList: { toggle: vi.fn() },
+        setAttribute: vi.fn(),
+        removeAttribute: vi.fn(),
       },
     });
 
@@ -141,15 +143,19 @@ describe("theme failure handling", () => {
     readSnapshot?.();
     readSnapshot?.();
 
-    expect(getItem).toHaveBeenCalledTimes(1);
-    expect(errorLog).toHaveBeenCalledTimes(1);
+    // Both the theme and theme-variant preferences are read (and fail) once
+    // before their respective read-failure caches short-circuit further reads.
+    expect(getItem).toHaveBeenCalledTimes(2);
+    expect(errorLog).toHaveBeenCalledTimes(2);
 
     const unsubscribe = subscribeToTheme?.(() => undefined);
     storageHandler?.({ key: "eflob:theme" } as StorageEvent);
     readSnapshot?.();
 
-    expect(getItem).toHaveBeenCalledTimes(2);
-    expect(errorLog).toHaveBeenCalledTimes(2);
+    // The storage event only resets the theme's read-failure cache, so only
+    // the theme preference is retried; the variant stays cached.
+    expect(getItem).toHaveBeenCalledTimes(3);
+    expect(errorLog).toHaveBeenCalledTimes(3);
     unsubscribe?.();
   });
 
