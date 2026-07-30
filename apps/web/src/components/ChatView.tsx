@@ -104,8 +104,8 @@ import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { buildTemporaryWorktreeBranchName } from "@eflob/shared/git";
-import { useMediaQuery } from "../hooks/useMediaQuery";
-import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
+import { RIGHT_PANEL_INLINE_LAYOUT_MAX_WIDTH } from "../rightPanelLayout";
+import { useAvailableContentWidth } from "../hooks/useAvailableContentWidth";
 import {
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
@@ -724,7 +724,8 @@ function ChatViewContent(props: ChatViewProps) {
   >({});
   const [pendingUserInputQuestionIndexByRequestId, setPendingUserInputQuestionIndexByRequestId] =
     useState<Record<string, number>>({});
-  const shouldUsePlanSidebarSheet = useMediaQuery(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY);
+  const shouldUsePlanSidebarSheet =
+    useAvailableContentWidth() <= RIGHT_PANEL_INLINE_LAYOUT_MAX_WIDTH;
   // Tracks whether the user explicitly dismissed the sidebar for the active turn.
   const planSidebarDismissedForTurnRef = useRef<string | null>(null);
   // When set, the thread-change reset effect will open the sidebar instead of closing it.

@@ -9,6 +9,7 @@ import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings"
 import { cn, isMacPlatform } from "../lib/utils";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import { useClientSettings } from "../hooks/useSettings";
+import { AvailableContentWidthProvider } from "../hooks/useAvailableContentWidth";
 import ThreadSidebar from "./Sidebar";
 import ThreadSidebarV2 from "./SidebarV2";
 import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
@@ -181,7 +182,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         {useSidebarV2 ? <ThreadSidebarV2 /> : <ThreadSidebar />}
         <SidebarRail />
       </Sidebar>
-      {children}
+      <AvailableContentWidthProvider>{children}</AvailableContentWidthProvider>
       <SidebarControl />
     </SidebarProvider>
   );
