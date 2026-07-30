@@ -1,6 +1,6 @@
 {
   "name": "@eflob/web",
-  "version": "0.0.28",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,6 +19,9 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@effect/atom-react": "catalog:",
+    "@eflob/client-runtime": "workspace:*",
+    "@eflob/contracts": "workspace:*",
+    "@eflob/shared": "workspace:*",
     "@fontsource-variable/dm-sans": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@formkit/auto-animate": "^0.9.0",
@@ -26,9 +29,6 @@
     "@lexical/react": "^0.41.0",
     "@pierre/diffs": "catalog:",
     "@pierre/trees": "1.0.0-beta.4",
-    "@eflob/client-runtime": "workspace:*",
-    "@eflob/contracts": "workspace:*",
-    "@eflob/shared": "workspace:*",
     "@tanstack/react-pacer": "^0.19.4",
     "@tanstack/react-router": "^1.160.2",
     "@xterm/addon-fit": "^0.11.0",
