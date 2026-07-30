@@ -6,6 +6,7 @@
  *
  * @module AnalyticsService
  */
+import { DEFAULT_SERVER_SETTINGS } from "@eflob/contracts";
 import { HostProcessArchitecture, HostProcessPlatform } from "@eflob/shared/hostProcess";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
@@ -14,12 +15,14 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 
 import packageJson from "../../package.json" with { type: "json" };
 import * as ServerConfig from "../config.ts";
+import { ServerSettingsService } from "../serverSettings.ts";
 import { getTelemetryIdentifier } from "./Identify.ts";
 
 interface BufferedAnalyticsEvent {
@@ -70,11 +73,23 @@ export const make = Effect.gen(function* () {
   const telemetryConfig = yield* TelemetryEnvConfig;
   const httpClient = yield* HttpClient.HttpClient;
   const serverConfig = yield* ServerConfig.ServerConfig;
+  const serverSettings = yield* ServerSettingsService;
   const identifier = yield* getTelemetryIdentifier;
   const bufferRef = yield* Ref.make<ReadonlyArray<BufferedAnalyticsEvent>>([]);
+  const usageTelemetryEnabledRef = yield* Ref.make(
+    (yield* serverSettings.getSettings.pipe(Effect.orElseSucceed(() => DEFAULT_SERVER_SETTINGS)))
+      .enableUsageTelemetry,
+  );
   const clientType = serverConfig.mode === "desktop" ? "desktop-app" : "cli-web-client";
   const hostPlatform = yield* HostProcessPlatform;
   const hostArchitecture = yield* HostProcessArchitecture;
+
+  yield* serverSettings.streamChanges.pipe(
+    Stream.runForEach((settings) =>
+      Ref.set(usageTelemetryEnabledRef, settings.enableUsageTelemetry),
+    ),
+    Effect.forkScoped,
+  );
 
   const enqueueBufferedEvent = (event: string, properties?: Readonly<Record<string, unknown>>) =>
     Effect.flatMap(DateTime.now, (now) =>
@@ -106,7 +121,8 @@ export const make = Effect.gen(function* () {
   const sendBatch = Effect.fn("AnalyticsService.sendBatch")(function* (
     events: ReadonlyArray<BufferedAnalyticsEvent>,
   ) {
-    if (!telemetryConfig.enabled || !identifier) return;
+    const usageTelemetryEnabled = yield* Ref.get(usageTelemetryEnabledRef);
+    if (!telemetryConfig.enabled || !usageTelemetryEnabled || !identifier) return;
 
     const payload = {
       api_key: telemetryConfig.posthogKey,
@@ -160,7 +176,8 @@ export const make = Effect.gen(function* () {
 
   const record: AnalyticsService["Service"]["record"] = Effect.fn("AnalyticsService.record")(
     function* (event, properties) {
-      if (!telemetryConfig.enabled || !identifier) return;
+      const usageTelemetryEnabled = yield* Ref.get(usageTelemetryEnabledRef);
+      if (!telemetryConfig.enabled || !usageTelemetryEnabled || !identifier) return;
 
       const enqueueResult = yield* enqueueBufferedEvent(event, properties);
       if (enqueueResult.dropped) {

@@ -81,6 +81,15 @@ export function applyServerConfigProjection(
         latestEvent: event,
         source: "live",
       }));
+    case "burnRate":
+      return Option.map(current, (projection) => ({
+        config: {
+          ...projection.config,
+          burnRate: event.payload.burnRate,
+        },
+        latestEvent: event,
+        source: "live",
+      }));
   }
 }
 
@@ -323,6 +332,14 @@ export function createServerEnvironmentAtoms<R, E>(
     refreshProviders: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:refresh-providers",
       tag: WS_METHODS.serverRefreshProviders,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
+    }),
+    refreshAccountUsage: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:refresh-account-usage",
+      tag: WS_METHODS.serverRefreshAccountUsage,
       concurrency: {
         mode: "singleFlight",
         key: ({ environmentId }) => environmentId,

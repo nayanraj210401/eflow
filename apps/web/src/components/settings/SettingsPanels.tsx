@@ -114,6 +114,24 @@ const THEME_OPTIONS = [
   },
 ] as const;
 
+const THEME_VARIANT_OPTIONS = [
+  {
+    value: "default",
+    label: "Default",
+    swatch: { light: "oklch(0.488 0.217 264)", dark: "oklch(0.588 0.217 264)" },
+  },
+  {
+    value: "nord",
+    label: "Nord",
+    swatch: { light: "#5e81ac", dark: "#88c0d0" },
+  },
+  {
+    value: "rose-pine",
+    label: "Rosé Pine",
+    swatch: { light: "#286983", dark: "#9ccfd8" },
+  },
+] as const;
+
 const TIMESTAMP_FORMAT_LABELS = {
   locale: "System default",
   "12-hour": "12-hour",
@@ -388,7 +406,7 @@ function AboutVersionSection() {
 }
 
 export function useSettingsRestore(onRestored?: () => void) {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, variant, setVariant } = useTheme();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
 
@@ -400,6 +418,7 @@ export function useSettingsRestore(onRestored?: () => void) {
   const changedSettingLabels = useMemo(
     () => [
       ...(theme !== "system" ? ["Theme"] : []),
+      ...(variant !== "default" ? ["Color preset"] : []),
       ...(settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity ? ["Glass opacity"] : []),
       ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
         ? ["Time format"]
@@ -465,6 +484,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.timestampFormat,
       settings.wordWrap,
       theme,
+      variant,
     ],
   );
 
@@ -479,6 +499,7 @@ export function useSettingsRestore(onRestored?: () => void) {
     if (!confirmed) return;
 
     setTheme("system");
+    setVariant("default");
     updateSettings({
       timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
       wordWrap: DEFAULT_UNIFIED_SETTINGS.wordWrap,
@@ -498,7 +519,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
     });
     onRestored?.();
-  }, [changedSettingLabels, onRestored, setTheme, updateSettings]);
+  }, [changedSettingLabels, onRestored, setTheme, setVariant, updateSettings]);
 
   return {
     changedSettingLabels,
@@ -506,58 +527,23 @@ export function useSettingsRestore(onRestored?: () => void) {
   };
 }
 
-export function GeneralSettingsPanel() {
-  const { theme, setTheme } = useTheme();
+export function AppearanceSettingsPanel() {
+  const { theme, setTheme, resolvedTheme, variant, setVariant } = useTheme();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
-  const lastEnabledProjectGroupingMode = useRef<SidebarProjectGroupingMode>(
-    readLastEnabledProjectGroupingMode(),
-  );
-  const observability = useAtomValue(primaryServerObservabilityAtom);
-  const serverProviders = useAtomValue(primaryServerProvidersAtom);
   const glassOpacityRatio =
     (settings.glassOpacity - MIN_GLASS_OPACITY) / (MAX_GLASS_OPACITY - MIN_GLASS_OPACITY);
   const glassOpacitySliderStyle = {
     "--glass-slider-progress": `${glassOpacityRatio * 100}%`,
     "--glass-slider-fill-offset": `${0.5 - glassOpacityRatio}rem`,
   } as CSSProperties;
-  const diagnosticsDescription = formatDiagnosticsDescription({
-    localTracingEnabled: observability?.localTracingEnabled ?? false,
-    otlpTracesEnabled: observability?.otlpTracesEnabled ?? false,
-    otlpTracesUrl: observability?.otlpTracesUrl,
-    otlpMetricsEnabled: observability?.otlpMetricsEnabled ?? false,
-    otlpMetricsUrl: observability?.otlpMetricsUrl,
-  });
-
-  const textGenerationModelSelection = resolveAppModelSelectionState(settings, serverProviders);
-  const textGenInstanceId = textGenerationModelSelection.instanceId;
-  const textGenModel = textGenerationModelSelection.model;
-  const textGenModelOptions = textGenerationModelSelection.options;
-  const gitModelInstanceEntries = sortProviderInstanceEntries(
-    applyProviderInstanceSettings(deriveProviderInstanceEntries(serverProviders), settings),
-  );
-  const textGenInstanceEntry = gitModelInstanceEntries.find(
-    (entry) => entry.instanceId === textGenInstanceId,
-  );
-  const textGenProvider: ProviderDriverKind =
-    textGenInstanceEntry?.driverKind ?? DEFAULT_DRIVER_KIND;
-  const gitModelOptionsByInstance = getCustomModelOptionsByInstance(
-    settings,
-    serverProviders,
-    textGenInstanceId,
-    textGenModel,
-  );
-  const isGitWritingModelDirty = !Equal.equals(
-    settings.textGenerationModelSelection ?? null,
-    DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
-  );
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="General">
+      <SettingsSection title="Appearance">
         <SettingsRow
           title="Theme"
-          description="Choose how eflob looks across the app."
+          description="Choose a light or dark theme for the panel, or follow your system setting."
           resetAction={
             theme !== "system" ? (
               <SettingResetButton label="theme" onClick={() => setTheme("system")} />
@@ -581,6 +567,49 @@ export function GeneralSettingsPanel() {
                 {THEME_OPTIONS.map((option) => (
                   <SelectItem hideIndicator key={option.value} value={option.value}>
                     {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Color preset"
+          description="Pick a curated color palette to use within the light and dark theme."
+          resetAction={
+            variant !== "default" ? (
+              <SettingResetButton label="color preset" onClick={() => setVariant("default")} />
+            ) : null
+          }
+          control={
+            <Select
+              value={variant}
+              onValueChange={(value) => {
+                if (value === "default" || value === "nord" || value === "rose-pine") {
+                  setVariant(value);
+                }
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-40" aria-label="Color preset">
+                <SelectValue>
+                  {THEME_VARIANT_OPTIONS.find((option) => option.value === variant)?.label ??
+                    "Default"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {THEME_VARIANT_OPTIONS.map((option) => (
+                  <SelectItem hideIndicator key={option.value} value={option.value}>
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="size-3 shrink-0 rounded-full"
+                        style={{
+                          backgroundColor: option.swatch[resolvedTheme],
+                        }}
+                      />
+                      {option.label}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectPopup>
@@ -633,7 +662,53 @@ export function GeneralSettingsPanel() {
             </div>
           }
         />
+      </SettingsSection>
+    </SettingsPageContainer>
+  );
+}
 
+export function GeneralSettingsPanel() {
+  const settings = usePrimarySettings();
+  const updateSettings = useUpdatePrimarySettings();
+  const lastEnabledProjectGroupingMode = useRef<SidebarProjectGroupingMode>(
+    readLastEnabledProjectGroupingMode(),
+  );
+  const observability = useAtomValue(primaryServerObservabilityAtom);
+  const serverProviders = useAtomValue(primaryServerProvidersAtom);
+  const diagnosticsDescription = formatDiagnosticsDescription({
+    localTracingEnabled: observability?.localTracingEnabled ?? false,
+    otlpTracesEnabled: observability?.otlpTracesEnabled ?? false,
+    otlpTracesUrl: observability?.otlpTracesUrl,
+    otlpMetricsEnabled: observability?.otlpMetricsEnabled ?? false,
+    otlpMetricsUrl: observability?.otlpMetricsUrl,
+  });
+
+  const textGenerationModelSelection = resolveAppModelSelectionState(settings, serverProviders);
+  const textGenInstanceId = textGenerationModelSelection.instanceId;
+  const textGenModel = textGenerationModelSelection.model;
+  const textGenModelOptions = textGenerationModelSelection.options;
+  const gitModelInstanceEntries = sortProviderInstanceEntries(
+    applyProviderInstanceSettings(deriveProviderInstanceEntries(serverProviders), settings),
+  );
+  const textGenInstanceEntry = gitModelInstanceEntries.find(
+    (entry) => entry.instanceId === textGenInstanceId,
+  );
+  const textGenProvider: ProviderDriverKind =
+    textGenInstanceEntry?.driverKind ?? DEFAULT_DRIVER_KIND;
+  const gitModelOptionsByInstance = getCustomModelOptionsByInstance(
+    settings,
+    serverProviders,
+    textGenInstanceId,
+    textGenModel,
+  );
+  const isGitWritingModelDirty = !Equal.equals(
+    settings.textGenerationModelSelection ?? null,
+    DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
+  );
+
+  return (
+    <SettingsPageContainer>
+      <SettingsSection title="General">
         <SettingsRow
           title="Project Grouping"
           description="Combine matching repositories across environments."
@@ -812,6 +887,32 @@ export function GeneralSettingsPanel() {
                 updateSettings({ enableProviderUpdateChecks: Boolean(checked) })
               }
               aria-label="Check provider versions"
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Usage data"
+          description="Send anonymous usage data to help improve the product."
+          resetAction={
+            settings.enableUsageTelemetry !== DEFAULT_UNIFIED_SETTINGS.enableUsageTelemetry ? (
+              <SettingResetButton
+                label="usage data"
+                onClick={() =>
+                  updateSettings({
+                    enableUsageTelemetry: DEFAULT_UNIFIED_SETTINGS.enableUsageTelemetry,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.enableUsageTelemetry}
+              onCheckedChange={(checked) =>
+                updateSettings({ enableUsageTelemetry: Boolean(checked) })
+              }
+              aria-label="Send usage data"
             />
           }
         />

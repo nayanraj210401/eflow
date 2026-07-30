@@ -1844,6 +1844,48 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     });
   });
 
+  /**
+   * Shared by end-of-turn refresh and the on-demand `refreshAccountUsage`
+   * adapter method — both need to turn a `/usage` response into the same
+   * `account.rate-limits.updated` runtime event.
+   */
+  const emitAccountUsageEvent = Effect.fn("emitAccountUsageEvent")(function* (
+    context: ClaudeSessionContext,
+    accountUsageResponse: SDKControlGetUsageResponse,
+  ) {
+    const accountUsageStamp = yield* makeEventStamp();
+    yield* offerRuntimeEvent({
+      type: "account.rate-limits.updated",
+      eventId: accountUsageStamp.eventId,
+      provider: PROVIDER,
+      createdAt: accountUsageStamp.createdAt,
+      threadId: context.session.threadId,
+      ...(context.session.providerInstanceId
+        ? { providerInstanceId: context.session.providerInstanceId }
+        : {}),
+      payload: {
+        rateLimits: { source: "claude-get-usage", data: accountUsageResponse },
+      },
+    });
+  });
+
+  /**
+   * Queries the authoritative `/usage` endpoint on demand for any one active
+   * session — account-level rate limits are per-account, not per-thread, so
+   * any live session's query handle can answer for the whole account.
+   */
+  const refreshAccountUsage: ClaudeAdapterShape["refreshAccountUsage"] = () =>
+    Effect.gen(function* () {
+      const activeContext = Array.from(sessions.values()).find((context) => !context.stopped);
+      if (!activeContext) {
+        return;
+      }
+      const accountUsageResponse = yield* queryCurrentAccountUsage(activeContext);
+      if (accountUsageResponse) {
+        yield* emitAccountUsageEvent(activeContext, accountUsageResponse);
+      }
+    }).pipe(Effect.ignore);
+
   const emitProposedPlanCompleted = Effect.fn("emitProposedPlanCompleted")(function* (
     context: ClaudeSessionContext,
     input: {
@@ -1955,20 +1997,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
 
     const accountUsageResponse = yield* queryCurrentAccountUsage(context);
     if (accountUsageResponse) {
-      const accountUsageStamp = yield* makeEventStamp();
-      yield* offerRuntimeEvent({
-        type: "account.rate-limits.updated",
-        eventId: accountUsageStamp.eventId,
-        provider: PROVIDER,
-        createdAt: accountUsageStamp.createdAt,
-        threadId: context.session.threadId,
-        ...(context.session.providerInstanceId
-          ? { providerInstanceId: context.session.providerInstanceId }
-          : {}),
-        payload: {
-          rateLimits: { source: "claude-get-usage", data: accountUsageResponse },
-        },
-      });
+      yield* emitAccountUsageEvent(context, accountUsageResponse);
     }
     const resultUsageRecord =
       result?.usage && typeof result.usage === "object" && !Array.isArray(result.usage)
@@ -4027,6 +4056,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     listSessions,
     hasSession,
     stopAll,
+    refreshAccountUsage,
     get streamEvents() {
       return Stream.fromQueue(runtimeEventQueue);
     },

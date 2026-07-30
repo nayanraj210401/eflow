@@ -16,7 +16,12 @@ export const EDITORS = [
   { id: "cursor", label: "Cursor", commands: ["cursor"], launchStyle: "goto" },
   { id: "trae", label: "Trae", commands: ["trae"], launchStyle: "goto" },
   { id: "kiro", label: "Kiro", commands: ["kiro"], baseArgs: ["ide"], launchStyle: "goto" },
-  { id: "vscode", label: "VS Code", commands: ["code"], launchStyle: "goto" },
+  {
+    id: "vscode",
+    label: "VS Code",
+    commands: ["code", "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"],
+    launchStyle: "goto",
+  },
   {
     id: "vscode-insiders",
     label: "VS Code Insiders",

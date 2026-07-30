@@ -5,9 +5,11 @@ import type { PreviewSessionSnapshot, ScopedProjectRef } from "@eflob/contracts"
 import { useEffect, useMemo } from "react";
 
 import { isCommandPaletteOpen } from "../commandPaletteBus";
+import { isElectron } from "../env";
 import { useClientSettings } from "../hooks/useSettings";
 import { openCommandPalette } from "../commandPaletteBus";
 import { CenterTabsHostRoot } from "../components/CenterTabsHostRoot";
+import { useSidebarVisibility } from "../components/ui/sidebar";
 import { useCenterTabsStore } from "../centerTabsStore";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useProjects, useThreadShell, useThreadShellsForProjectRefs } from "../state/entities";
@@ -274,11 +276,21 @@ function ChatRouteLayout() {
   const projectRef = useActiveRouteProjectRef();
   useReconcileCenterThreadTabs(projectRef);
   const previewSessions = useAggregatedPreviewSessions();
+  // The left sidebar (`SidebarChromeHeader`) normally owns the desktop
+  // traffic-light drag region. When it's collapsed/hidden, this host becomes
+  // the new leftmost surface, so it must take over that responsibility or
+  // its breadcrumb/tab strip render flush under the traffic lights instead.
+  const isSidebarVisible = useSidebarVisibility();
+  const ownsDesktopTitleBar = isElectron && !isSidebarVisible;
 
   return (
     <>
       <ChatRouteGlobalShortcuts />
-      <CenterTabsHostRoot projectRef={projectRef} previewSessions={previewSessions} />
+      <CenterTabsHostRoot
+        projectRef={projectRef}
+        previewSessions={previewSessions}
+        ownsDesktopTitleBar={ownsDesktopTitleBar}
+      />
       <Outlet />
     </>
   );

@@ -1,5 +1,5 @@
 import type { EnvironmentId, PreviewSessionSnapshot, ScopedProjectRef } from "@eflob/contracts";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { scopeProjectRef } from "@eflob/client-runtime/environment";
 
@@ -9,6 +9,8 @@ import { shouldShowOpenInPicker } from "~/components/chat/ChatHeader";
 import { OpenInPicker } from "~/components/chat/OpenInPicker";
 import GitActionsControl from "~/components/GitActionsControl";
 import { useAssembledRightSidebarProps } from "~/hooks/useAssembledRightSidebarProps";
+import { useHandleNewThread } from "~/hooks/useHandleNewThread";
+import { startNewThreadFromContext } from "~/lib/chatThreadActions";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useComposerDraftStore } from "~/composerDraftStore";
 import { useProject, useThreadShell } from "~/state/entities";
@@ -147,6 +149,45 @@ function CenterTabsPanelControls({
   );
 }
 
+/**
+ * Wraps `CenterTabBar` for the case where a thread tab is (or was)
+ * active, resolving `onOpenPreview`/`onOpenDiff` from the same
+ * `useAssembledRightSidebarProps` used by `CenterTabsTopBarActions`/
+ * `CenterTabsPanelControls` above, so the "+" menu's "Preview"/"Changes"
+ * items open the exact same per-thread singleton surfaces as the existing
+ * header buttons. When there's no active thread tab, the caller renders a
+ * plain `CenterTabBar` instead with both callbacks `null` (disabled).
+ */
+function CenterTabBarWithAddActions({
+  environmentId,
+  target,
+  onNewChat,
+  projectRef,
+  previewSessions,
+  className,
+}: {
+  environmentId: EnvironmentId;
+  target: Extract<CenterTab, { kind: "thread" }>["target"];
+  onNewChat: () => void;
+  projectRef: ScopedProjectRef;
+  previewSessions: Readonly<Record<string, PreviewSessionSnapshot>>;
+  className?: string;
+}) {
+  const props = useAssembledRightSidebarProps({ environmentId, target });
+
+  return (
+    <CenterTabBar
+      projectRef={projectRef}
+      previewSessions={previewSessions}
+      ownsDesktopTitleBar={false}
+      onNewChat={onNewChat}
+      onOpenPreview={props ? props.createBrowserSurface : null}
+      onOpenDiff={props ? props.addDiffSurface : null}
+      {...(className !== undefined ? { className } : {})}
+    />
+  );
+}
+
 export interface CenterTabsHostProps {
   projectRef: ScopedProjectRef | null | undefined;
   previewSessions: Readonly<Record<string, PreviewSessionSnapshot>>;
@@ -262,6 +303,16 @@ export function CenterTabsHost({
   const activeThreadTabId = envState.activeThreadTabId;
   const lastActiveThreadTab = activeThreadTabId ? envState.tabs[activeThreadTabId] : undefined;
 
+  const newThreadContext = useHandleNewThread();
+  const onNewChat = useCallback(() => {
+    void startNewThreadFromContext({
+      activeDraftThread: newThreadContext.activeDraftThread,
+      activeThread: newThreadContext.activeThread ?? undefined,
+      defaultProjectRef: newThreadContext.defaultProjectRef,
+      handleNewThread: newThreadContext.handleNewThread,
+    });
+  }, [newThreadContext]);
+
   // Least-recently-active-first eviction of backgrounded thread mounts,
   // generalizing `reconcileRetainedMountedThreadIds` (previously
   // terminal-thread-only) across "how many hidden ChatView instances can
@@ -321,11 +372,10 @@ export function CenterTabsHost({
          * traffic-light-inset drag region when this host is the desktop
          * title bar owner — `CenterTabBar` is always passed `false` here so
          * the drag region isn't duplicated/fought over between the two rows.
-         * When there's no project/thread to show yet, the breadcrumb renders
-         * `null` (see `CenterTabsBreadcrumb`), which would silently drop the
-         * drag region; that's an acceptable, narrow gap (matches the
-         * pre-existing behavior of `CenterTabBar` itself rendering `null`
-         * when there are no visible tabs) rather than a regression.
+         * `CenterTabsBreadcrumb` keeps rendering (as an empty spacer) even
+         * with no project/thread to show yet whenever it owns the title bar,
+         * so the drag region and traffic-light inset are never silently
+         * dropped — see the guard in that component.
          */}
         <div className="flex items-stretch">
           <CenterTabsBreadcrumb
@@ -349,12 +399,26 @@ export function CenterTabsHost({
          * so the controls stay visible even with no tabs open.
          */}
         <div className="flex items-stretch">
-          <CenterTabBar
-            projectRef={projectRef}
-            previewSessions={previewSessions}
-            ownsDesktopTitleBar={false}
-            className="min-w-0 flex-1"
-          />
+          {isThreadTab(lastActiveThreadTab) ? (
+            <CenterTabBarWithAddActions
+              environmentId={environmentId}
+              target={lastActiveThreadTab.target}
+              onNewChat={onNewChat}
+              projectRef={projectRef}
+              previewSessions={previewSessions}
+              className="min-w-0 flex-1"
+            />
+          ) : (
+            <CenterTabBar
+              projectRef={projectRef}
+              previewSessions={previewSessions}
+              ownsDesktopTitleBar={false}
+              onNewChat={onNewChat}
+              onOpenPreview={null}
+              onOpenDiff={null}
+              className="min-w-0 flex-1"
+            />
+          )}
           {isThreadTab(lastActiveThreadTab) ? (
             <CenterTabsPanelControls
               environmentId={environmentId}

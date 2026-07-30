@@ -488,6 +488,9 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
         sessions.clear();
       });
 
+    const refreshAccountUsage: ProviderAdapterShape<ProviderAdapterError>["refreshAccountUsage"] =
+      () => Effect.void;
+
     const adapter: ProviderAdapterShape<ProviderAdapterError> = {
       provider,
       capabilities: {
@@ -504,6 +507,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
       readThread,
       rollbackThread,
       stopAll,
+      refreshAccountUsage,
       streamEvents: Stream.fromQueue(runtimeEvents),
     };
 

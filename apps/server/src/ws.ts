@@ -77,7 +77,9 @@ import {
   observeRpcStreamEffect as instrumentRpcStreamEffect,
 } from "./observability/RpcInstrumentation.ts";
 import * as AccountUsageService from "./provider/Services/AccountUsage.ts";
+import * as BurnRateService from "./provider/Services/BurnRate.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
+import * as ProviderService from "./provider/Services/ProviderService.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import { isHeadroomCliAvailable } from "./provider/Drivers/HeadroomProxy.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
@@ -298,6 +300,7 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.serverProbe, AuthOrchestrationReadScope],
   [WS_METHODS.serverGetConfig, AuthOrchestrationReadScope],
   [WS_METHODS.serverRefreshProviders, AuthOrchestrationOperateScope],
+  [WS_METHODS.serverRefreshAccountUsage, AuthOrchestrationOperateScope],
   [WS_METHODS.serverUpdateProvider, AuthOrchestrationOperateScope],
   [WS_METHODS.serverUpdateServer, AuthOrchestrationOperateScope],
   [WS_METHODS.serverUpsertKeybinding, AuthOrchestrationOperateScope],
@@ -421,7 +424,9 @@ const makeWsRpcLayer = (
       const previewManager = yield* PreviewManager.PreviewManager;
       const portDiscovery = yield* PortScanner.PortDiscovery;
       const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
+      const providerService = yield* ProviderService.ProviderService;
       const accountUsage = yield* AccountUsageService.AccountUsage;
+      const burnRate = yield* BurnRateService.BurnRate;
       const providerMaintenanceRunner = yield* ProviderMaintenanceRunner.ProviderMaintenanceRunner;
       const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
       const config = yield* ServerConfig.ServerConfig;
@@ -1101,6 +1106,7 @@ const makeWsRpcLayer = (
           shellResumeCompletionMarker: true,
           threadResumeCompletionMarker: true,
           accountUsage: yield* accountUsage.getSnapshots,
+          burnRate: yield* burnRate.getSnapshots,
         };
       });
 
@@ -1473,6 +1479,12 @@ const makeWsRpcLayer = (
               ? providerRegistry.refreshInstance(input.instanceId)
               : providerRegistry.refresh()
             ).pipe(Effect.map((providers) => ({ providers }))),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverRefreshAccountUsage]: (_input) =>
+          observeRpcEffect(
+            WS_METHODS.serverRefreshAccountUsage,
+            providerService.refreshAccountUsage().pipe(Effect.map(() => ({}))),
             { "rpc.aggregate": "server" },
           ),
         [WS_METHODS.serverUpdateProvider]: (input) =>
@@ -2030,6 +2042,13 @@ const makeWsRpcLayer = (
                   payload: { accountUsage: snapshots },
                 })),
               );
+              const burnRateUpdates = burnRate.streamChanges.pipe(
+                Stream.map((snapshots) => ({
+                  version: 1 as const,
+                  type: "burnRate" as const,
+                  payload: { burnRate: snapshots },
+                })),
+              );
 
               yield* providerRegistry
                 .refresh()
@@ -2037,7 +2056,10 @@ const makeWsRpcLayer = (
 
               const liveUpdates = Stream.merge(
                 keybindingsUpdates,
-                Stream.merge(providerStatuses, Stream.merge(settingsUpdates, accountUsageUpdates)),
+                Stream.merge(
+                  providerStatuses,
+                  Stream.merge(settingsUpdates, Stream.merge(accountUsageUpdates, burnRateUpdates)),
+                ),
               );
 
               return Stream.concat(

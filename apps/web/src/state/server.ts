@@ -1,4 +1,5 @@
 import {
+  type BurnRateSnapshots,
   DEFAULT_SERVER_SETTINGS,
   type EditorId,
   type ProviderAccountUsageSnapshots,
@@ -36,6 +37,7 @@ interface PrimaryServerState {
 const EMPTY_AVAILABLE_EDITORS: ReadonlyArray<EditorId> = [];
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 const EMPTY_ACCOUNT_USAGE: ProviderAccountUsageSnapshots = [];
+const EMPTY_BURN_RATE: BurnRateSnapshots = [];
 const EMPTY_PRIMARY_SERVER_STATE: PrimaryServerState = {
   config: null,
   latestEvent: null,
@@ -86,6 +88,10 @@ export const primaryServerAccountUsageAtom = Atom.make(
   (get): ProviderAccountUsageSnapshots =>
     get(primaryServerConfigAtom)?.accountUsage ?? EMPTY_ACCOUNT_USAGE,
 ).pipe(Atom.withLabel("web-primary-server-account-usage"));
+
+export const primaryServerBurnRateAtom = Atom.make(
+  (get): BurnRateSnapshots => get(primaryServerConfigAtom)?.burnRate ?? EMPTY_BURN_RATE,
+).pipe(Atom.withLabel("web-primary-server-burn-rate"));
 
 export const primaryServerKeybindingsAtom = Atom.make(
   (get): ServerConfig["keybindings"] =>
