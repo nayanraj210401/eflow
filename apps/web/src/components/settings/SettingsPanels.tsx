@@ -554,10 +554,10 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="General">
+      <SettingsSection title="Appearance">
         <SettingsRow
           title="Theme"
-          description="Choose how eflob looks across the app."
+          description="Choose a light or dark theme for the panel, or follow your system setting."
           resetAction={
             theme !== "system" ? (
               <SettingResetButton label="theme" onClick={() => setTheme("system")} />
@@ -633,7 +633,9 @@ export function GeneralSettingsPanel() {
             </div>
           }
         />
+      </SettingsSection>
 
+      <SettingsSection title="General">
         <SettingsRow
           title="Project Grouping"
           description="Combine matching repositories across environments."
