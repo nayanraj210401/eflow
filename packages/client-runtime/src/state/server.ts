@@ -316,6 +316,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:process-resource-history",
       tag: WS_METHODS.serverGetProcessResourceHistory,
     }),
+    headroomCliStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:headroom-cli-status",
+      tag: WS_METHODS.serverGetHeadroomCliStatus,
+    }),
     configProjection,
     welcome: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:welcome",

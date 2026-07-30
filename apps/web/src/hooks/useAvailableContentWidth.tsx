@@ -10,11 +10,7 @@ const AvailableContentWidthContext = React.createContext<number | null>(null);
  * closes, or resizes, since that only redistributes space inside a flex
  * row without changing the window's own dimensions.
  */
-export function AvailableContentWidthProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export function AvailableContentWidthProvider({ children }: { children: React.ReactNode }) {
   const [width, setWidth] = React.useState<number | null>(null);
   const elementRef = React.useRef<HTMLDivElement | null>(null);
 
